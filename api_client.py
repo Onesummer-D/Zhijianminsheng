@@ -1,95 +1,111 @@
-"""
-API调用模块 - 由B同学负责实现DeepSeek调用
-当前为Mock版本，B拿到Key后替换真实调用
-"""
-
+import os
+import time
+import requests
 import json
-import requests  # B需要安装: pip install requests
+import re
+from typing import Dict, Optional
 
-def classify_complaint(text: str) -> dict:
-    """
-    调用DeepSeek API对投诉文本进行涉检线索分类
-    
-    参数:
-        text: 投诉文本字符串
+class DeepSeekClient:
+    def __init__(self, api_key: Optional[str] = None, timeout: int = 30):
+        self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
+        if not self.api_key:
+            raise ValueError("DeepSeek API Key 未设置")
         
-    返回:
-        dict: {
-            "type": "线索类型（刑事犯罪/公益诉讼/民事支持起诉/行政执法监督）",
-            "confidence": 置信度(0-1),
-            "law": "相关法律依据",
-            "reason": "分析理由",
-            "suggestion": "处置建议"
+        self.base_url = "https://api.deepseek.com"
+        self.timeout = timeout
+        self.headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
         }
     
-    TODO: B同学在此处实现真实DeepSeek API调用
-    当前返回Mock数据用于界面测试
-    """
+    def _clean_json_response(self, content: str) -> str:
+        """清洗Markdown代码块，提取纯JSON"""
+        # 去掉 ```json 或 ``` 包裹
+        if content.strip().startswith("```"):
+            # 提取 ``` 和 ``` 之间的内容
+            match = re.search(r"```(?:json)?\s*(.*?)```", content, re.DOTALL)
+            if match:
+                return match.group(1).strip()
+        return content.strip()
     
-    # 临时Mock逻辑（B后续替换为真实API）
-    text = str(text).lower() if text else ""
-    
-    if any(kw in text for kw in ["污染", "环境", "废水", "排污", "生态"]):
-        return {
-            "type": "公益诉讼",
-            "confidence": 0.85,
-            "law": "《环境保护法》第58条",
-            "reason": "涉及环境污染或生态破坏线索",
-            "suggestion": "建议移送公益诉讼检察部门审查"
-        }
-    elif any(kw in text for kw in ["欠薪", "拖欠工资", "克扣报酬", "劳务纠纷"]):
-        return {
-            "type": "民事支持起诉",
-            "confidence": 0.82,
-            "law": "《劳动合同法》第30条",
-            "reason": "用人单位拖欠劳动报酬",
-            "suggestion": "建议民事检察部门支持起诉"
-        }
-    elif any(kw in text for kw in ["诈骗", "盗窃", "故意伤害", "非法集资"]):
-        return {
-            "type": "刑事犯罪",
-            "confidence": 0.88,
-            "law": "《刑法》相关条款",
-            "reason": "涉嫌刑事犯罪，需进一步侦查",
-            "suggestion": "建议移送刑事检察部门"
-        }
-    elif any(kw in text for kw in ["执法不公", "滥用职权", "程序违法"]):
-        return {
-            "type": "行政执法监督",
-            "confidence": 0.75,
-            "law": "《行政处罚法》相关条款",
-            "reason": "行政执法行为可能存在违法",
-            "suggestion": "建议行政检察部门监督"
-        }
-    else:
-        return {
-            "type": "普通投诉",
-            "confidence": 0.15,
-            "law": "不涉及检察机关监督职能",
-            "reason": "暂未识别出涉检线索",
-            "suggestion": "建议按普通信访事项处理"
-        }
+    def analyze_complaint(self, text: str, max_retries: int = 3) -> Dict:
+        prompt = f"""你是一个专业的检察院案件筛查助手。请分析以下12345投诉文本，判断其是否涉及检察监督线索。
 
-def test_api_connection(api_key: str) -> bool:
-    """
-    测试DeepSeek API连接（B同学实现）
-    
-    参数:
-        api_key: DeepSeek API密钥
+投诉内容：{text}
+
+请严格按照以下JSON格式返回（不要包含其他内容）：
+{{
+    "is_relevant": true/false,
+    "category": "刑事犯罪/公益诉讼/民事支持起诉/行政执法监督/不涉及",
+    "confidence": 85,
+    "legal_basis": "相关法律条款",
+    "reasoning": "简要判断理由",
+    "risk_level": "高/中/低"
+}}"""
+
+        messages = [
+            {"role": "system", "content": "你是一个专业的检察院案件筛查助手，擅长从12345投诉中识别涉检线索。"},
+            {"role": "user", "content": prompt}
+        ]
         
-    返回:
-        bool: 连接成功返回True，否则False
-    """
-    # TODO: B同学实现真实测试
-    # 示例代码（B参考）：
-    # headers = {"Authorization": f"Bearer {api_key}"}
-    # response = requests.get("https://api.deepseek.com/v1/models", headers=headers)
-    # return response.status_code == 200
-    
-    return True  # 临时返回True
+        payload = {
+            "model": "deepseek-chat",
+            "messages": messages,
+            "temperature": 0.3,
+            "max_tokens": 500
+        }
+        
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=self.headers,
+                    json=payload,
+                    timeout=self.timeout
+                )
+                response.raise_for_status()
+                
+                result = response.json()
+                content = result['choices'][0]['message']['content']
+                
+                try:
+                    # 清洗Markdown格式后解析
+                    clean_content = self._clean_json_response(content)
+                    parsed = json.loads(clean_content)
+                    return {
+                        'is_relevant': parsed.get('is_relevant', False),
+                        'category': parsed.get('category', '不涉及'),
+                        'confidence': parsed.get('confidence', 0),
+                        'legal_basis': parsed.get('legal_basis', ''),
+                        'reasoning': parsed.get('reasoning', ''),
+                        'risk_level': parsed.get('risk_level', '低'),
+                        'raw_response': content
+                    }
+                except json.JSONDecodeError as e:
+                    return {
+                        'is_relevant': False,
+                        'category': '解析失败',
+                        'confidence': 0,
+                        'error': f'JSON解析失败: {str(e)}',
+                        'raw_response': content
+                    }
+                    
+            except requests.exceptions.Timeout:
+                if attempt == max_retries - 1:
+                    return {'error': 'API请求超时', 'is_relevant': False}
+                time.sleep(2 ** attempt)
+                
+            except requests.exceptions.RequestException as e:
+                if attempt == max_retries - 1:
+                    return {'error': f'API请求失败: {str(e)}', 'is_relevant': False}
+                time.sleep(2 ** attempt)
+        
+        return {'error': '未知错误', 'is_relevant': False}
 
-# 如果直接运行此文件，进行简单测试
 if __name__ == "__main__":
-    test_text = "公司拖欠员工工资三个月"
-    result = classify_complaint(test_text)
-    print("测试结果:", json.dumps(result, ensure_ascii=False, indent=2))
+    client = DeepSeekClient()
+    
+    test_text = "工厂拖欠农民工工资三个月不给"
+    print(f"测试投诉：{test_text}")
+    result = client.analyze_complaint(test_text)
+    print(f"分析结果：{json.dumps(result, ensure_ascii=False, indent=2)}")
