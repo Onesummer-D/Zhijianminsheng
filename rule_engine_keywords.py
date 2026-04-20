@@ -1,360 +1,611 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-关键词库 - 从Excel自动生成（双层级权重）
-核心定性词匹配：+3分
-特征词匹配：+1分
+rule_engine_keywords.py - 由Excel自动生成（多标签修复版）
 """
 
-import jieba
 import re
 
 KEYWORDS_DB = {
     "刑事犯罪": {
         "核心定性词": {
-            "诈骗": 3,
-            "盗窃": 3,
-            "抢劫": 3,
-            "抢夺": 3,
-            "故意伤害": 3,
-            "杀人": 3,
-            "强奸": 3,
-            "猥亵": 3,
-            "非法拘禁": 3,
-            "绑架": 3,
-            "敲诈勒索": 3,
-            "寻衅滋事": 3,
-            "聚众斗殴": 3,
-            "涉黑": 3,
-            "涉恶": 3,
-            "村霸": 3,
-            "保护伞": 3,
-            "黄赌毒": 3,
-            "制毒": 3,
-            "贩毒": 3,
-            "容留吸毒": 3,
-            "开设赌场": 3,
-            "组织卖淫": 3,
-            "强迫卖淫": 3,
-            "拒不支付劳动报酬（恶意欠薪）": 3,
-            "危险驾驶": 3,
-            "醉酒驾车": 3,
-            "危害公共安全": 3,
-            "放火": 3,
-            "决水": 3,
-            "爆炸": 3,
-            "投放危险物质": 3,
-            "侵犯公民个人信息": 3,
-            "非法集资": 3,
-            "组织领导传销活动": 3,
+            "酒驾": 3,
             "高空抛物": 3,
-            "扔垃圾砸车": 3,
-            "走私精神药品": 3,
-            "三唑仑": 3,
-            "咪达唑仑": 3,
-            "失火罪": 3,
-            "上坟祭扫引发山火": 3,
-            "烧毁侧柏": 3,
-            "一级森林防火区": 3,
-            "毒品": 3
+            "吸毒": 3,
+            "毒驾": 3,
+            "赌博": 3,
+            "醉驾": 3,
+            "盗窃": 3,
+            "爆炸": 3,
+            "强奸": 3,
+            "杀猪盘": 3,
+            "赌场": 3,
+            "猥亵": 3,
+            "传销": 3,
+            "层级返利": 3,
+            "肇事逃逸": 3,
+            "笑气": 3,
+            "打K": 3,
+            "投毒": 3,
+            "逃匿": 3,
+            "贩毒": 3,
+            "冒充公检法": 3,
+            "藏毒": 3,
+            "拒不支付劳动报酬": 3,
+            "寻衅滋事": 3,
+            "溜冰": 3,
+            "诈骗": 3,
+            "放火": 3,
+            "刷单诈骗": 3,
+            "上头烟": 3,
+            "运毒": 3,
+            "电子烟": 3
         },
         "特征词": {
-            "被打": 1,
-            "被抢": 1,
-            "被偷": 1,
-            "被骗钱": 1,
-            "被威胁": 1,
-            "被跟踪": 1,
-            "被骚扰": 1,
-            "非法拘禁": 1,
-            "限制自由": 1,
-            "强行带走": 1,
-            "动手打人": 1,
-            "聚众闹事": 1,
-            "拉横幅恐吓": 1,
-            "发现尸体": 1,
-            "发现血迹": 1,
-            "伪造公章": 1,
-            "造假证": 1,
-            "恶意拨打12345": 1,
-            "辱骂接线员": 1,
-            "多次无故占用公共资源": 1,
-            "以举报为要挟索要财物": 1,
-            "封口费": 1,
-            "虚假投诉骗取赔偿": 1,
-            "非法剥夺人身自由": 1,
-            "转移财产逃匿": 1,
-            "经责令支付仍不支付": 1
+            "偷.*(电瓶": 1,
+            "包工头跑路": 1,
+            "偷电瓶": 1,
+            "扔": 1,
+            "拉人头": 1,
+            "偷电动车": 1,
+            "失踪": 1,
+            "群殴": 1,
+            "贼": 1,
+            "REGEX:欠.*工资": 1,
+            "溜.*冰": 1,
+            "进贼": 1,
+            "偷.*挖": 1,
+            "扒手": 1,
+            "跑了": 1,
+            "洗.*脑": 1,
+            "贵重": 1,
+            "砍人": 1,
+            "丢)": 1,
+            "被骗": 1,
+            "砍伤": 1,
+            "交会费": 1,
+            "发展下线": 1,
+            "关机": 1,
+            "东西)": 1,
+            "赖.*工资": 1,
+            "打伤": 1,
+            "冒充": 1,
+            "小偷": 1,
+            "车": 1,
+            "跑.*路": 1,
+            "偷钢筋": 1,
+            "电话打不通": 1,
+            "盗.*采": 1,
+            "洗脑": 1,
+            "打人": 1,
+            "持刀": 1,
+            "持械": 1,
+            "REGEX:顺.*(电瓶": 1,
+            "顺走": 1,
+            "斗殴": 1,
+            "拖.*工资": 1,
+            "保健品诈骗": 1,
+            "骗钱": 1,
+            "流血": 1,
+            "REGEX:高空.*(抛": 1,
+            "REGEX:搞.*传销": 1,
+            "闹事": 1,
+            "打架": 1,
+            "失联": 1,
+            "找不到人": 1,
+            "拉.*人头": 1,
+            "REGEX:非.*法.*采矿": 1,
+            "REGEX:逃.*匿": 1,
+            "伤人": 1,
+            "捅伤": 1,
+            "REGEX:吸.*毒": 1,
+            "贩.*毒": 1,
+            "动刀子": 1,
+            "偷车": 1,
+            "失.*联": 1,
+            "捅人": 1,
+            "丢了": 1,
+            "跑路": 1,
+            "撬门": 1
         },
-        "对应部门": "公安"
     },
     "公益诉讼": {
         "核心定性词": {
-            "污染环境": 3,
-            "生态破坏": 3,
-            "损害社会公共利益": 3,
-            "侵害众多消费者权益": 3,
-            "食品药品安全": 3,
-            "英雄烈士名誉": 3,
-            "文物保护": 3,
-            "非法排污": 3,
-            "非法占地": 3,
+            "污染": 3,
+            "土地出让": 3,
+            "疫苗": 3,
+            "三无": 3,
+            "腹泻": 3,
+            "国资流失": 3,
+            "病死猪": 3,
+            "地沟油": 3,
+            "偷挖沙石": 3,
+            "过期食品": 3,
+            "补贴": 3,
+            "社保基金": 3,
+            "挪用": 3,
+            "被猎光": 3,
             "非法采矿": 3,
-            "滥伐林木": 3,
-            "非法捕捞": 3,
-            "侵害众多消费者合法权益": 3,
-            "省级以上消费者协会": 3,
-            "侵害英烈名誉荣誉": 3,
-            "生态修复费用": 3,
-            "惩罚性赔偿": 3,
-            "国有财产保护": 3,
-            "国有土地使用权出让": 3,
-            "重复投诉": 3,
-            "持续污染": 3,
-            "群体性事件": 3,
-            "国有资产流失": 3,
-            "多次反映": 3,
-            "一直没人管": 3,
-            "大家都投诉": 3
+            "开荒": 3,
+            "烈士陵园": 3,
+            "排黑水": 3,
+            "医保基金": 3,
+            "非法添加": 3,
+            "被吞": 3,
+            "诋毁英雄": 3,
+            "河水变黑": 3,
+            "绝迹": 3,
+            "黑作坊": 3,
+            "小吃街": 3,
+            "套取": 3,
+            "毁林": 3,
+            "排污": 3,
+            "毒跑道": 3,
+            "耕地": 3,
+            "英烈": 3,
+            "食物中毒": 3
         },
         "特征词": {
-            "河水发黑发臭": 1,
-            "刺鼻气味": 1,
-            "粉尘噪音扰民": 1,
-            "土壤重金属": 1,
-            "污水直排": 1,
-            "偷排废液": 1,
-            "非法倾倒固废": 1,
-            "垃圾填埋污染地下水": 1,
-            "工厂冒黑烟": 1,
-            "雾霾来源": 1,
-            "扬尘污染": 1,
-            "占用河道": 1,
-            "占用农用地": 1,
-            "挖沙采石": 1,
-            "破坏林地": 1,
-            "破坏耕地": 1,
-            "食物中毒": 1,
-            "集体腹泻": 1,
-            "过期食品翻新": 1,
-            "生产日期造假": 1,
-            "药品副作用群体事件": 1,
-            "虚假宣传保健品坑害老人": 1,
-            "外卖不卫生": 1,
-            "无证经营": 1,
-            "黑作坊": 1,
-            "病死猪肉": 1,
-            "地沟油": 1,
-            "非法添加": 1,
-            "转基因食品未标注": 1,
-            "疫苗问题": 1,
-            "猎杀野生动物": 1,
-            "非法采矿致土地破坏": 1,
-            "生态修复费": 1,
-            "诉中修复": 1,
-            "非法倾倒建筑生活垃圾": 1,
-            "惩罚性赔偿金": 1,
-            "化工厂排污致饮用水源污染": 1,
-            "环境污染严重": 1
+            "乱砍树": 1,
+            "REGEX:挖山.采矿": 1,
+            "噪音": 1,
+            "废水": 1,
+            "都投诉": 1,
+            "我们都": 1,
+            "味道刺鼻": 1,
+            "猪粪.乱倒": 1,
+            "REGEX:河水.(变黑": 1,
+            "排废水)": 1,
+            "没人处理": 1,
+            "渗坑": 1,
+            "一直没人管": 1,
+            "填埋)": 1,
+            "空气.呛人": 1,
+            "养殖": 1,
+            "学校.跑道.臭": 1,
+            "倾倒渣土": 1,
+            "反复举报": 1,
+            "众多消费者": 1,
+            "采砂": 1,
+            "REGEX:树林.被砍": 1,
+            "冒黑烟": 1,
+            "建筑垃圾.堆放": 1,
+            "毁林.开荒": 1,
+            "粉尘": 1,
+            "偷排": 1,
+            "全村都": 1,
+            "REGEX:垃圾.(乱倒": 1,
+            "填埋垃圾": 1,
+            "排黑水": 1,
+            "REGEX:毒跑道": 1,
+            "污水": 1,
+            "暗管": 1,
+            "垃圾乱倒": 1,
+            "偷挖.沙石": 1,
+            "拉肚子": 1,
+            "塑胶跑道.异味": 1,
+            "REGEX:养猪场.(排污": 1,
+            "砍树": 1,
+            "呛人": 1,
+            "多次反映": 1,
+            "挖沙子": 1,
+            "水发臭": 1,
+            "发臭)": 1,
+            "挖空": 1,
+            "挖山": 1,
+            "非法.伐木": 1
         },
-        "对应部门": "检察院、公益诉讼、起诉、检察建议、环境督察\n"
     },
     "民事支持起诉": {
         "核心定性词": {
-            "支持起诉": 3,
-            "弱势群体": 3,
-            "打不起官司": 3,
             "没钱打官司": 3,
-            "讨薪无门": 3,
-            "维权困难": 3,
-            "老年人赡养": 3,
-            "残疾人权益": 3,
-            "未成年人保护": 3,
-            "撤销监护权": 3,
-            "家庭暴力": 3,
-            "校园欺凌": 3,
-            "工伤赔偿纠纷": 3,
-            "追索扶养费": 3,
-            "追索赡养费": 3,
-            "家庭暴力受害人请求离婚": 3,
-            "军人军属权益受侵害": 3,
-            "申请法律援助被拒": 3,
-            "法律咨询": 3,
-            "协调法律援助": 3,
-            "恶意欠薪": 3,
-            "拒不支付劳动报酬": 3,
-            "农民工工资": 3,
-            "劳务费": 3,
-            "农民工": 3,
+            "老人": 3,
+            "五保户": 3,
+            "不养爹妈": 3,
+            "赡养费": 3,
+            "工伤不赔": 3,
+            "儿女不管": 3,
+            "请不起律师": 3,
             "拖欠工资": 3,
-            "讨薪": 3,
-            "干完活不给钱": 3,
-            "拿不到工资": 3,
-            "找不到老板": 3
+            "不懂法": 3,
+            "赖账": 3,
+            "抚养费": 3,
+            "医药费": 3,
+            "丢下不管": 3,
+            "农民工": 3,
+            "没证据": 3,
+            "困难户": 3,
+            "低保": 3,
+            "欠薪": 3,
+            "残疾人": 3,
+            "欠条": 3
         },
         "特征词": {
-            "建筑工人": 1,
-            "清洁工": 1,
-            "保安": 1,
-            "老年人（60岁以上）": 1,
-            "残疾人": 1,
-            "未成年人": 1,
-            "留守儿童": 1,
-            "妇女": 1,
-            "被家暴": 1,
-            "低保户": 1,
-            "五保户": 1,
-            "退伍军人优抚": 1,
-            "帮忙写诉状": 1,
-            "不会打官司": 1,
-            "收集不了证据": 1,
-            "法院要证据我没有": 1,
-            "公司注销了告谁": 1,
-            "老板跑了": 1,
-            "申请法律援助被拒": 1,
-            "不知道被告身份信息": 1,
+            "跳闸": 1,
+            "不赔": 1,
+            "漏水": 1,
+            "包工.纠纷": 1,
+            "合同纠纷": 1,
+            "墙壁发霉": 1,
+            "裂缝)": 1,
+            "REGEX:建房.(质量差": 1,
+            "作证": 1,
+            "没人养": 1,
+            "证人": 1,
+            "放线错": 1,
+            "盖房.纠纷": 1,
+            "没人管)": 1,
+            "找不着": 1,
+            "干杂活": 1,
             "确认劳动关系": 1,
-            "追索抚养费": 1,
-            "追索赡养费": 1,
-            "大风刮倒围挡砸车": 1,
-            "免费停车场车辆受损": 1,
-            "防盗门砸伤业主": 1,
-            "十级伤残": 1,
-            "农村建房施工合同纠纷": 1,
-            "墙壁发霉跳闸": 1,
-            "承揽人质量不合格": 1,
-            "工程款": 1,
-            "多次讨要未果": 1,
-            "没签合同": 1
+            "赡养)": 1,
+            "REGEX:抚养费.不给": 1,
+            "电话打不通": 1,
+            "赖工资": 1,
+            "没签合同": 1,
+            "物业": 1,
+            "REGEX:装修.(出问题": 1,
+            "REGEX:工伤.*(不赔": 1,
+            "REGEX:老人.(没人管": 1,
+            "房子漏水": 1,
+            "欠我": 1,
+            "质量差)": 1,
+            "不给钱": 1,
+            "丢下孩子不管": 1,
+            "前夫.不给.抚养费": 1,
+            "门柱": 1,
+            "不给结": 1,
+            "不赔钱": 1
         },
-        "对应部门": "检察院支持起诉、出具意见书、协助调查取证、跟进审理进度\n"
     },
     "行政执法监督": {
         "核心定性词": {
-            "行政不作为": 3,
-            "乱作为": 3,
-            "懒政怠政": 3,
-            "选择性执法": 3,
-            "违法审批": 3,
-            "违规许可": 3,
-            "查处不力": 3,
-            "取缔不力": 3,
-            "相互推诿": 3,
-            "踢皮球": 3,
-            "不履行法定职责": 3,
-            "检察建议": 3,
-            "行政机关违法行使职权": 3,
-            "行政争议实质性化解": 3,
-            "抗诉": 3,
-            "再审检察建议": 3,
-            "纠正违法检察建议": 3,
-            "社会治理检察建议": 3,
-            "行刑双向衔接": 3,
-            "行政违法行为监督": 3,
-            "公开听证": 3,
-            "释法说理": 3,
-            "司法救助": 3,
+            "保护伞": 3,
+            "通风报信": 3,
+            "推诿扯皮": 3,
+            "以罚代管": 3,
+            "不作为": 3,
             "小过重罚": 3,
-            "过罚不当": 3,
-            "同案不同罚": 3,
-            "行政处罚畸重": 3,
+            "乱作为": 3,
+            "强拆": 3,
+            "久拖不决": 3,
+            "程序违法": 3,
             "首违不罚": 3,
-            "罚款太重": 3,
-            "小本生意罚不起": 3,
-            "同样情况罚得不一样": 3,
-            "首违免罚": 3,
-            "初次轻微违法": 3,
-            "罚款与违法情节不相当": 3,
-            "违法所得很少但罚款很高": 3,
-            "反映了一年没动静": 3
+            "钓鱼执法": 3,
+            "暴力执法": 3,
+            "同案不同罚": 3
         },
         "特征词": {
-            "职能部门说不归他管": 1,
-            "违法建筑还在建没人拆": 1,
-            "噪音超标环保说测不了": 1,
-            "无证经营举报了还在开": 1,
-            "占道经营没人赶": 1,
-            "违法停车交警不管": 1,
-            "虚假处罚决定书": 1,
-            "滥用职权强拆": 1,
-            "村务公开监督": 1,
-            "镇政府不履行村务公开督办职责": 1,
-            "棚户区改造强拆": 1,
-            "帮拆名义强拆": 1,
-            "暴力拖出控制": 1,
-            "破坏监控": 1,
-            "合法宅基地被拆": 1,
-            "工伤认定不予受理": 1,
-            "猴疱疹病毒感染": 1,
-            "病毒性脑炎死亡": 1,
-            "行政复议维持": 1,
-            "处罚不公平": 1
+            "违法所得少罚款高": 1,
+            "不当)": 1,
+            "纵容": 1,
+            "小本生意": 1,
+            "首次.免罚": 1,
+            "没给听证机会": 1,
+            "走过场": 1,
+            "包庇": 1,
+            "奇葩证明": 1,
+            "敷衍塞责": 1,
+            "拖着": 1,
+            "踢皮球": 1,
+            "罚得太狠": 1,
+            "REGEX:推诿.扯皮": 1,
+            "久拖.*不决": 1,
+            "今天拆明天建": 1,
+            "不作为": 1,
+            "相当)": 1,
+            "REGEX:同案.(不同罚": 1,
+            "选择性.执法": 1,
+            "小过.重罚": 1,
+            "不同处理)": 1,
+            "罚款太重": 1,
+            "材料反复交": 1,
+            "REGEX:过罚.(不当": 1,
+            "没动静": 1,
+            "不亮证": 1,
+            "罚我": 1,
+            "一刀切": 1,
+            "投诉没用": 1,
+            "罚款.太重": 1,
+            "扯皮": 1,
+            "不罚": 1,
+            "罚款不开票": 1,
+            "REGEX:首违.(免罚": 1,
+            "张口就罚": 1,
+            "形式主义": 1,
+            "迟迟不办": 1,
+            "没告知申辩权": 1,
+            "不出示执法证": 1,
+            "从轻)": 1,
+            "REGEX:程序.(违法": 1,
+            "不出示.证件": 1,
+            "石沉大海": 1,
+            "整改": 1,
+            "没人管": 1
         },
-        "对应部门": "市场监督管理局、生态环境局、自然资源局、城管局、住建局、卫健委、教育局、人社局、公安局派出所（不作为）、消防大队\n、督促履职、纠正违法、整改落实、行政公益诉讼、发出检察建议"
-    }
+    },
 }
 
-def _match_keyword(text: str, keyword: str) -> bool:
-    """三层匹配：精确 -> jieba分词 -> 字级"""
+EXCLUDE_WORDS = [
+    "小说里",
+    "假定",
+    "模拟场景",
+    "狼人杀",
+    "假若",
+    "譬如",
+    "想象一下",
+    "做梦",
+    "梦话",
+    "虚拟案例",
+    "剧本里",
+    "噩梦惊醒",
+    "我举个例子",
+    "如若",
+    "假设情况",
+    "倘若",
+    "电影里",
+    "杀人游戏",
+    "假设",
+    "假如说",
+    "电视剧里",
+    "假设一下",
+    "梦见",
+    "假如",
+    "如果我是",
+    "梦到",
+    "游戏里",
+    "梦里",
+    "美梦",
+    "梦境",
+    "白日梦",
+    "剧本杀",
+    "虚构故事",
+    "梦游",
+    "情节里",
+    "算了不",
+    "设若",
+    "噩梦",
+]
+
+CATEGORY_PRIORITY = ["刑事犯罪", "公益诉讼", "行政执法监督", "民事支持起诉"]
+
+def _match_keyword_strict(text, keyword):
+    """增强匹配：支持正则前缀+智能间隔匹配"""
+    if not text or not keyword:
+        return False
+    text = str(text).lower()
+    keyword = str(keyword).lower()
+    
+    # 1. 精确子串匹配
     if keyword in text:
         return True
-    text_words = list(jieba.cut(text))
-    kw_words = list(jieba.cut(keyword))
-    # 简化版子序列匹配
-    if len(kw_words) == 1:
-        return kw_words[0] in text_words
-    try:
-        idx = text_words.index(kw_words[0])
-        for kw in kw_words[1:]:
-            found = False
-            for i in range(idx+1, min(idx+4, len(text_words))):
-                if text_words[i] == kw:
-                    idx = i
-                    found = True
-                    break
-            if not found:
-                return False
-        return True
-    except:
-        pass
-    # 字级兜底
-    return bool(re.search(".".join(keyword), text))
+    
+    # 2. 正则匹配
+    if keyword.startswith("regex:"):
+        try:
+            pattern = keyword[6:]
+            return bool(re.search(pattern, text, re.IGNORECASE))
+        except:
+            return False
+    
+    # 3. 智能间隔匹配（4字以上关键词）
+    if len(keyword) >= 4:
+        try:
+            chars = [re.escape(c) for c in keyword]
+            pattern = r'[\s\S]{0,4}'.join(chars)
+            if re.search(pattern, text, re.IGNORECASE):
+                return True
+        except:
+            pass
+    
+    return False
 
-def calculate_confidence(text: str, category: str) -> dict:
-    """双层级权重算法"""
-    if not text or category not in KEYWORDS_DB:
-        return {"score": 0, "confidence": "低", "matched_core": [], "matched_feature": []}
-    
-    score = 0
-    matched_core = []
-    matched_feature = []
-    cat_data = KEYWORDS_DB[category]
-    
-    for word, weight in cat_data["核心定性词"].items():
-        if _match_keyword(text, word):
-            score += weight
-            matched_core.append(word)
-    
-    for word, weight in cat_data["特征词"].items():
-        if _match_keyword(text, word):
-            score += weight
-            matched_feature.append(word)
-    
-    if score >= 6 or len(matched_core) >= 2:
-        conf = "高"
-    elif score >= 3 or len(matched_core) == 1:
-        conf = "中"
-    else:
-        conf = "低"
-    
-    return {"score": score, "confidence": conf, "matched_core": matched_core, "matched_feature": matched_feature}
-
-def keyword_match(text: str) -> str:
-    """返回得分最高的类别（阈值3分）"""
+def calculate_confidence(text, category):
+    """计算置信度"""
     if not text:
-        return None
-    best_cat, best_score = None, 0
+        return {"score": 0, "has_core": False, "matched_core": [], "matched_feature": []}
+    
+    text = str(text).lower()
+    cat_data = KEYWORDS_DB.get(category, {})
+    
+    if not cat_data:
+        return {"score": 0, "has_core": False, "matched_core": [], "matched_feature": []}
+    
+    # 核心词匹配
+    core_score = 0
+    matched_core = []
+    for kw, score in cat_data.get("核心定性词", {}).items():
+        if _match_keyword_strict(text, kw):
+            core_score += score
+            matched_core.append(kw)
+    
+    # 特征词匹配
+    feature_score = 0
+    matched_feature = []
+    for kw, score in cat_data.get("特征词", {}).items():
+        if _match_keyword_strict(text, kw):
+            feature_score += score
+            matched_feature.append(kw)
+    
+    total = core_score + feature_score
+    
+    # 排除词软过滤（扣分制）
+    penalty = 0
+    exclude_hits = []
+    for word in EXCLUDE_WORDS:
+        if word in text:
+            penalty += 2
+            exclude_hits.append(word)
+    
+    final_score = max(0, total - penalty)
+    
+    return {
+        "score": final_score,
+        "raw_score": total,
+        "penalty": penalty,
+        "has_core": len(matched_core) > 0,
+        "matched_core": matched_core,
+        "matched_feature": matched_feature,
+        "exclude_hits": exclude_hits
+    }
+
+
+def classify_single(text):
+    """单条分类 - 多标签支持版（阈值3分）"""
+    if not text or len(text.strip()) < 5:
+        return {"primary": None, "score": 0, "matched": [], "all_scores": {}, "reason": "文本过短", "core_detail": None, "secondaries": []}
+    
+    text = str(text)
+    candidates = {}
+    all_scores = {}
+    all_details = {}
+    
     for cat in KEYWORDS_DB.keys():
         result = calculate_confidence(text, cat)
-        if result["score"] > best_score:
-            best_score = result["score"]
-            best_cat = cat
-    return best_cat if best_score >= 3 else None
+        all_scores[cat] = result["score"]
+        all_details[cat] = result
+        
+        # 关键：得分>=3分即可进入候选（支持多标签）
+        if result["score"] >= 3:
+            candidates[cat] = result
+    
+    if not candidates:
+        return {
+            "primary": None,
+            "score": 0,
+            "matched": [],
+            "all_scores": all_scores,
+            "reason": "无类别得分>=3分",
+            "core_detail": None,
+            "secondaries": []
+        }
+    
+    # 排序：得分优先，同分按优先级
+    def sort_key(item):
+        cat, data = item
+        score = data["score"]
+        priority_idx = CATEGORY_PRIORITY.index(cat) if cat in CATEGORY_PRIORITY else 99
+        return (-score, priority_idx)
+    
+    sorted_cats = sorted(candidates.items(), key=sort_key)
+    best_cat, best_data = sorted_cats[0]
+    
+    # 计算次要类别：>=3分 且 与最高分差距<=3分
+    secondaries = []
+    primary_score = best_data["score"]
+    
+    for cat, data in sorted_cats[1:]:  # 跳过主要类别
+        score = data["score"]
+        gap = primary_score - score
+        if score >= 3 and gap <= 3:
+            secondaries.append({
+                "category": cat,
+                "score": score,
+                "gap": gap,
+                "matched_core": data["matched_core"][:2],
+                "confidence": "high" if score >= 6 else "medium"
+            })
+    
+    secondaries = secondaries[:2]  # 最多2个
+    
+    # 组装显示
+    display = best_data["matched_core"][:3]
+    if best_data["matched_feature"]:
+        display += ["%s(特征)" % f for f in best_data["matched_feature"][:2]]
+    
+    conf = "高" if best_data["score"] >= 6 else ("中" if best_data["score"] >= 3 else "低")
+    
+    return {
+        "primary": best_cat,
+        "score": best_data["score"],
+        "confidence_level": conf,
+        "matched": display,
+        "all_scores": all_scores,
+        "reason": "命中核心词: %s | 得分: %s" % (best_data['matched_core'], best_data['score']),
+        "core_detail": best_data,
+        "secondaries": secondaries,
+        "all_details": all_details
+    }
+
+
+
+def extract_location(text):
+    """点位提取 - 修复版（增加身份词清洗）"""
+    if not text:
+        return "—"
+    
+    import re
+    
+    # 第一步：清洗前缀（增强版）
+    clean_text = text
+    
+    # 强力清洗各种前缀
+    prefixes = [
+        r'昨天\s*', r'前天\s*',
+        r'我是\s*', r'他是\s*', r'她是\s*',  # 【新增】清洗"我是"
+        r'我在\s*', r'我们在\s*', r'来电人\s*', r'投诉人\s*',
+        r'公司\s*在?\s*', r'工厂\s*在?\s*', r'工地\s*在?\s*',
+        r'位于\s*', r'住在?\s*', r'住\s*',
+        r'地址是?\s*', r'在\s*',
+        r'老板\s*在?\s*', r'包工头\s*在?\s*', r'负责人\s*在?\s*',
+        r'他\s*在\s*', r'她\s*在\s*'
+    ]
+    
+    for p in prefixes:
+        clean_text = re.sub(p, '', clean_text)
+    
+    # 【关键新增】清洗身份词前缀（农民工、残疾人等）
+    clean_text = re.sub(r'^[我是们]+', '', clean_text)
+    clean_text = re.sub(r'^住', '', clean_text)
+    clean_text = re.sub(r'^农民工[，,、]?\s*', '', clean_text)  # 清洗"农民工，"
+    clean_text = re.sub(r'^残疾人[，,、]?\s*', '', clean_text)   # 清洗"残疾人，"
+    clean_text = re.sub(r'^老人[，,、]?\s*', '', clean_text)     # 清洗"老人，"
+    clean_text = re.sub(r'^工人[，,、]?\s*', '', clean_text)     # 清洗"工人，"
+    
+    # 第二步：清洗干扰词
+    clean_text = re.sub(r'村委会|居委会', '', clean_text)
+    clean_text = re.sub(r'附近|旁边|周边|有个|有座|底下', '', clean_text)
+    clean_text = re.sub(r'^老板|包工头|负责人|公司|工厂|工地', '', clean_text)
+    
+    # 第三步：先截断文本，防止匹配过长
+    stop_words = r'(?:有人|打架|动刀|流血|给|干|做|是|在|被|把|让|帮|和|与|或|但是|不过|就|都|也|还|要|会|能|可以|因为|所以|如果|虽然|但是)'
+    match_stop = re.search(stop_words, clean_text)
+    if match_stop:
+        clean_text = clean_text[:match_stop.start()]
+    
+    # 第四步：匹配地址
+    location_suffix = r'(?:村|社区|小区|家园|花园|公寓|路|街|巷|桥|广场|大厦|中心|园|城)'
+    
+    # 模式A：区+镇/街道+地标
+    pattern_a = r'([一-龥]{2,4}区)([一-龥]{2,6}(?:镇|街道|乡))([一-龥]{2,8}' + location_suffix + r')?'
+    match = re.search(pattern_a, clean_text)
+    if match:
+        addr = ''.join(filter(None, match.groups()))
+        if 4 <= len(addr) <= 20:
+            return addr
+    
+    # 模式A2：区名（无"区"字）+ 镇/街道
+    pattern_a2 = r'([一-龥]{2,4})([一-龥]{2,6}(?:镇|街道|乡))'
+    match = re.search(pattern_a2, clean_text)
+    if match:
+        addr = ''.join(match.groups())
+        if 4 <= len(addr) <= 12 and not addr[0].isdigit():
+            return addr
+    
+    # 模式B：镇/街道+地标（无区）
+    pattern_b = r'([一-龥]{2,6}(?:镇|街道|乡))([一-龥]{2,8}' + location_suffix + r')'
+    match = re.search(pattern_b, clean_text)
+    if match:
+        addr = ''.join(match.groups())
+        if 4 <= len(addr) <= 16:
+            return addr
+    
+    # 兜底：区+镇/街道
+    fallback = r'([一-龥]{2,4}区)([一-龥]{2,6}(?:镇|街道|乡))'
+    match = re.search(fallback, clean_text)
+    if match:
+        addr = ''.join(match.groups())
+        return addr if len(addr) >= 4 else "—"
+    
+    return "—"
+
