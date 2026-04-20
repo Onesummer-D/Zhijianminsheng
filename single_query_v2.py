@@ -28,7 +28,6 @@ except ImportError as e:
     sys.exit(1)
 
 LEGAL_BASIS = {}
-SIMILAR_CASES = {}
 
 def load_legal_basis():
     paths = ['./data/legal_basis.json']
@@ -38,16 +37,11 @@ def load_legal_basis():
                 return json.load(f)
     return {}
 
-def load_similar_cases():
-    paths = ['./data/similar_cases.json']
-    for path in paths:
-        if os.path.exists(path):
-            with open(path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-    return {cat: [] for cat in KEYWORDS_DB.keys()}
-
 LEGAL_BASIS = load_legal_basis()
-SIMILAR_CASES = load_similar_cases()
+
+# 【替换】TF-IDF相似度匹配引擎
+from similarity_matcher import CaseSimilarityMatcher
+MATCHER = CaseSimilarityMatcher('./data/similar_cases.json')
 
 def get_laws_for_category(category: str):
     if not category or "非涉检" in category:
@@ -55,12 +49,9 @@ def get_laws_for_category(category: str):
     return LEGAL_BASIS.get(category, {"default": [], "extended": []})
 
 def get_similar_cases(category: str, text: str = ""):
-    if not category:
+    if not category or "非涉检" in category:
         return None, []
-    cases = SIMILAR_CASES.get(category, [])
-    if not cases:
-        return None, []
-    return cases[0], cases[1:3]
+    return MATCHER.match(text, category, top_k=3)
 
 # ========== 【修复版 analyze_real】 ==========#
 def analyze_real(text):
@@ -588,23 +579,53 @@ def create_ui():
                 law_html = '<span style="color:#999; font-size:15px;">非涉检线索，无需关联法条</span>'
                 ext_html = '<span style="color:#999; font-size:15px;">—</span>'
             
-            # 相似案例
+            # 相似案例（修复*100 + 优化表格UI）
             best = result.get("相似案例")
             if best:
                 case_name = best.get("title", best.get("案例标题", "—"))
-                sim_score = f"{best.get('similarity', best.get('匹配度', 0))*100:.0f}%" if isinstance(best.get('similarity'), (int, float)) else "85%"
+                # 【修复】后端已返回60-100整数，不再*100
+                raw_sim = best.get('similarity', best.get('匹配度', 0))
+                sim_score = f"{raw_sim}%" if isinstance(raw_sim, (int, float)) else "85%"
             else:
                 case_name = "—"
                 sim_score = "—"
             
             others = result.get("相似案例列表", [])
             if others:
-                cases_html = "<table style='width:100%;font-size:14px;'><tr style='background:#f0f0f0;'><th>案例</th><th>匹配度</th></tr>"
+                # 【优化】检察院风格表格：白底、细线、匹配度分色
+                cases_html = """
+                <table style='width:100%;font-size:14px;border-collapse:collapse;'>
+                    <thead>
+                        <tr style='border-bottom:1px solid #999;'>
+                            <th style='text-align:left;padding:8px 4px;font-weight:600;color:#333;'>案例</th>
+                            <th style='text-align:center;padding:8px 4px;font-weight:600;color:#333;width:80px;'>匹配度</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                """
                 for c in others:
                     title = c.get('title', c.get('案例标题', '未知'))
-                    sim = f"{c.get('similarity', 0)*100:.0f}%" if isinstance(c.get('similarity'), (int, float)) else "80%"
-                    cases_html += f"<tr><td>{title}</td><td style='text-align:center;'>{sim}</td></tr>"
-                cases_html += "</table>"
+                    sim_val = c.get('similarity', 0)
+                    sim_str = f"{sim_val}%" if isinstance(sim_val, (int, float)) else "80%"
+                    
+                    # 匹配度分色：>=90%深绿，>=80%蓝，<80%灰
+                    if isinstance(sim_val, (int, float)):
+                        if sim_val >= 90:
+                            color = "#2e7d32"  # 深绿
+                        elif sim_val >= 80:
+                            color = "#1565c0"  # 蓝
+                        else:
+                            color = "#757575"  # 灰
+                    else:
+                        color = "#757575"
+                    
+                    cases_html += f"""
+                        <tr style='border-bottom:1px solid #eee;transition:background 0.2s;' onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background='white'">
+                            <td style='padding:8px 4px;color:#333;'>{title}</td>
+                            <td style='padding:8px 4px;text-align:center;font-weight:600;color:{color};'>{sim_str}</td>
+                        </tr>
+                    """
+                cases_html += "</tbody></table>"
             else:
                 cases_html = "<span style='color:#999; font-size:14px;'>暂无其他相似案例</span>"
             
