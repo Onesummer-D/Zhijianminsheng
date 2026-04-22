@@ -27,58 +27,6 @@ except ImportError as e:
     print(f"❌ 规则引擎加载失败: {e}")
     sys.exit(1)
 
-# ========== 【覆盖】独立的点位提取函数（根治版） ==========
-def extract_location(text):
-    """点位提取 - 清洗版（找到房山区，返回前清洗后缀冗余）"""
-    if not text:
-        return "—"
-    import re
-    
-    idx = text.find("房山区")
-    if idx == -1:
-        return "—"
-    
-    search_text = text[idx:idx+25]
-    suffix = r'(?:村|社区|小区|家园|花园|公寓|路|街|巷|桥|广场|大厦|中心|园|城|码头|河|头|塔|店|馆|站|乡|镇|街道)'
-    
-    # 模式1：区+镇/街道/乡+地标
-    m = re.search(r'(房山区)([一-龥]{2,6}(?:镇|街道|乡))([一-龥]{2,8}' + suffix + r')?', search_text)
-    if m:
-        addr = ''.join(filter(None, m.groups()))
-        if 4 <= len(addr) <= 22:
-            # 【清洗】去掉末尾"的村"、"的路"等冗余
-            addr = re.sub(r'的(村|路|街|巷|桥|广场|大厦|中心|园|城|码头|河|头|塔|店|馆|站|乡|镇|街道|社区|小区|家园|花园|公寓)$', r'\1', addr)
-            # 【清洗】去重后缀（路路→路，村村→村）
-            addr = re.sub(r'(村|路|街|巷|桥|广场|大厦|中心|园|城|码头|河|头|塔|店|馆|站|乡|镇|街道)\1+$', r'\1', addr)
-            return addr
-    
-    # 模式2：区+镇/街道/乡
-    m = re.search(r'(房山区)([一-龥]{2,6}(?:镇|街道|乡))', search_text)
-    if m:
-        addr = ''.join(m.groups())
-        if 4 <= len(addr) <= 12:
-            return addr
-    
-    # 模式3：镇/街道/乡+地标（无区）
-    m = re.search(r'([一-龥]{2,6}(?:镇|街道|乡))([一-龥]{2,8}' + suffix + r')', search_text)
-    if m:
-        addr = ''.join(m.groups())
-        if 4 <= len(addr) <= 16:
-            addr = re.sub(r'的(村|路|街|巷|桥|广场|大厦|中心|园|城|码头|河|头|塔|店|馆|站|乡|镇|街道|社区|小区|家园|花园|公寓)$', r'\1', addr)
-            addr = re.sub(r'(村|路|街|巷|桥|广场|大厦|中心|园|城|码头|河|头|塔|店|馆|站|乡|镇|街道)\1+$', r'\1', addr)
-            return addr
-    
-    # 模式4：区+2-6字（兜底）
-    m = re.search(r'(房山区)([一-龥]{2,6})', search_text)
-    if m:
-        addr = ''.join(m.groups())
-        if 4 <= len(addr) <= 12:
-            addr = re.sub(r'的(村|路|街|巷|桥|广场|大厦|中心|园|城|码头|河|头|塔|店|馆|站|乡|镇|街道|社区|小区|家园|花园|公寓)$', r'\1', addr)
-            addr = re.sub(r'(村|路|街|巷|桥|广场|大厦|中心|园|城|码头|河|头|塔|店|馆|站|乡|镇|街道)\1+$', r'\1', addr)
-            return addr
-    
-    return "—"
-
 LEGAL_BASIS = {}
 
 def load_legal_basis():
@@ -105,26 +53,9 @@ def get_similar_cases(category: str, text: str = ""):
         return None, []
     return MATCHER.match(text, category, top_k=3)
 
-# ========== 【新增】热重载关键词库（无需重启服务） ==========
-def reload_rule_engine():
-    """每次分析前强制重新加载最新关键词库（不覆盖点位函数）"""
-    global KEYWORDS_DB, calculate_confidence, classify_single, CATEGORY_PRIORITY
-    if 'rule_engine_keywords' in sys.modules:
-        del sys.modules['rule_engine_keywords']
-    try:
-        import rule_engine_keywords as rule
-        KEYWORDS_DB = rule.KEYWORDS_DB
-        calculate_confidence = rule.calculate_confidence
-        classify_single = rule.classify_single
-        # 【关键】不再覆盖 extract_location，保留 single_query_v2.py 里定义的根治版
-        CATEGORY_PRIORITY = rule.CATEGORY_PRIORITY
-    except Exception as e:
-        print(f"⚠️ 关键词库重载失败: {e}")
 # ========== 【修复版 analyze_real】 ==========#
 def analyze_real(text):
     try:
-        reload_rule_engine()  # 【关键】自动加载最新关键词库，无需重启服务
-        
         if not text or len(text.strip()) < 5:
             return {
                 "主要类别": "—", "次要类别": "—", "置信度等级": "⚪ 低",
@@ -138,17 +69,15 @@ def analyze_real(text):
         # 1. 规则引擎分析所有类别
         all_scores = {}
         matched_keywords = []
-        all_exclude_hits = set()
+        all_exclude_hits = set()  # 【新增】收集所有排除词命中
         
         for cat in ["刑事犯罪", "公益诉讼", "民事支持起诉", "行政执法监督"]:
             result = calculate_confidence(text, cat)
             score = result.get("score", 0)
             all_scores[cat] = score
-            # 【修复】calculate_confidence 返回的是 matched_core / matched_feature
-            if result.get("matched_core"):
-                matched_keywords.extend(result["matched_core"])
-            if result.get("matched_feature"):
-                matched_keywords.extend([f"{m}(特征)" for m in result["matched_feature"]])
+            if result.get("matched_keywords"):
+                matched_keywords.extend(result.get("matched_keywords"))
+            # 【新增】收集排除词
             for w in result.get("exclude_hits", []):
                 all_exclude_hits.add(w)
         
@@ -185,7 +114,7 @@ def analyze_real(text):
                            ("污染" in text or "环境" in text) and 
                            ("没人管" in text or "反映" in text or "走过场" in text))
         
-        is_quick_pass = (rule_score >= 4 and 
+        is_quick_pass = (rule_score >= 6 and 
                          not has_potential_cross and 
                          score_gap >= 3 and 
                          not is_env_with_admin)
@@ -215,7 +144,7 @@ def analyze_real(text):
                 "all_categories": [rule_primary]
             }
         
-        # 【新增】排除词强保护：触发排除词且扣分后最高分<3，直接非涉检
+        # 【新增】排除词强保护：触发排除词且扣分后最高分<3，直接非涉检（避免API幻觉误判）
         if all_exclude_hits and rule_score < 3:
             return {
                 "主要类别": "普通投诉（非涉检）",
@@ -246,6 +175,7 @@ def analyze_real(text):
             if second_score >= 3:
                 rule_secondaries_list = [{"category": second_cat, "score": second_score}]
             
+            # rule_score=0时，API看到all_scores全0会自动语义兜底
             api_result = client.analyze_multi_label(
                 text, 
                 rule_primary, 
@@ -263,6 +193,7 @@ def analyze_real(text):
                 
         except Exception as e:
             api_reason = f"API错误: {str(e)[:30]}"
+            # API失败且规则引擎0分，无法判定，安全降级为非涉检
             if rule_score == 0:
                 return {
                     "主要类别": "普通投诉（非涉检）",
@@ -281,12 +212,14 @@ def analyze_real(text):
         final_primary = api_primary
         final_secondaries = []
         
+        # 合并规则引擎次要类别（去重）
         if rule_secondaries:
             for s in rule_secondaries:
                 cat_name = s["category"] if isinstance(s, dict) else s
                 if cat_name and cat_name != final_primary and cat_name not in final_secondaries:
                     final_secondaries.append(cat_name)
         
+        # 合并API次要类别（兼容字符串和字典，去重）
         if api_secondaries:
             for sec in api_secondaries:
                 if isinstance(sec, str) and sec != final_primary and sec not in final_secondaries:
@@ -296,7 +229,7 @@ def analyze_real(text):
                     if sc and sc != final_primary and sc not in final_secondaries:
                         final_secondaries.append(sc)
         
-        # 7. 【关键修复】非涉检最终判定
+        # 7. 【关键修复】非涉检最终判定：必须融合后仍无涉检类别
         if (not final_primary or 
             "非涉检" in final_primary or 
             final_primary == "未知" or 
@@ -314,13 +247,15 @@ def analyze_real(text):
                 "all_categories": []
             }
         
-        # 8. 【关键修复】点位提取：基于最终判定
+        # 8. 【关键修复】点位提取：基于最终判定，而非规则引擎分数
+        # 只要最终主类别是有效涉检类别，就提取点位（extract_location本身没改）
         location = extract_location(text)
         
         # 9. 【关键修复】次要类别显示：兼容字符串和字典格式
         second_cat_display = "—"
         sec_parts = []
         
+        # 先处理API次要类别（兼容两种格式）
         if api_secondaries:
             for sec in api_secondaries[:2]:
                 if isinstance(sec, str):
@@ -328,6 +263,7 @@ def analyze_real(text):
                 elif isinstance(sec, dict):
                     sec_parts.append(f"{sec.get('category', '')}(DeepSeek)")
         
+        # API没有则使用规则引擎次要类别
         if not sec_parts and rule_secondaries:
             for s in rule_secondaries[:2]:
                 if isinstance(s, dict):
@@ -369,9 +305,10 @@ def analyze_real(text):
             f"推理：{api_reason}"
         ]
         
-        # 13. 【关键修复】多类别法条查询列表
+        # 13. 【关键修复】多类别法条查询列表：独立追加，兼容格式，去重
         all_cats = [final_primary]
         
+        # 添加API次要类别（兼容字符串和字典）
         if api_secondaries:
             for s in api_secondaries[:2]:
                 if isinstance(s, str) and s not in all_cats:
@@ -381,6 +318,7 @@ def analyze_real(text):
                     if sc and sc not in all_cats:
                         all_cats.append(sc)
         
+        # 添加规则引擎次要类别（去重）
         if rule_secondaries:
             for s in rule_secondaries[:2]:
                 cat_name = s["category"] if isinstance(s, dict) else s
@@ -415,7 +353,6 @@ def analyze_real(text):
             "相似案例": None, "相似案例列表": [],
             "all_categories": []
         }
-
 # ========== UI部分（完全保持原样） ==========
 def create_ui():
     with gr.Blocks(title="智检民声 - 12345涉检线索智能筛查系统", css="""
@@ -571,10 +508,12 @@ def create_ui():
                         elem_classes=["output-box"]
                     )
         
+        # 【修复6】on_analyze 支持多标签法条 + 去掉截断
         def on_analyze(text):
             result = analyze_real(text)
             cat = result["主要类别"]
 
+            # 多类别法条查询 - 按主要:次要 = 2:1 比例分配
             all_categories = result.get("all_categories", [])
             if not all_categories and cat and "非涉检" not in cat:
                 all_categories = [cat]
@@ -586,9 +525,11 @@ def create_ui():
                 primary_cat = all_categories[0]
                 secondary_cats = [c for c in all_categories[1:] if c and "非涉检" not in c][:2]
                 
-                sec_slots = min(len(secondary_cats) * 2, 2)
-                pri_slots = 6 - sec_slots
+                # 计算配额：主要类别占2/3，次要类别共占1/3，总计最多6个
+                sec_slots = min(len(secondary_cats) * 2, 2)  # 次要类别总槽位最多2个
+                pri_slots = 6 - sec_slots  # 主要类别占满剩余槽位
                 
+                # 1. 先收集主要类别法条
                 p_laws = get_laws_for_category(primary_cat)
                 for item in p_laws.get("default", [])[:pri_slots]:
                     item_id = item.get('编号', item.get('title', str(item)))
@@ -601,6 +542,7 @@ def create_ui():
                         seen_ids.add(item_id)
                         combined_laws["extended"].append(item)
                 
+                # 2. 再收集次要类别法条（平分sec_slots）
                 if secondary_cats and sec_slots > 0:
                     per_sec = max(1, sec_slots // len(secondary_cats))
                     for sec_cat in secondary_cats:
@@ -616,6 +558,7 @@ def create_ui():
                                 seen_ids.add(item_id)
                                 combined_laws["extended"].append(item)
             
+            # 法条显示（去掉截断）
             if "非涉检" not in cat and "失败" not in cat and "—" not in cat and all_categories:
                 law_html = '<div class="law-container" style="margin-top:-12px;padding-top:0px;">'
                 if combined_laws.get("default"):
@@ -636,9 +579,11 @@ def create_ui():
                 law_html = '<span style="color:#999; font-size:15px;">非涉检线索，无需关联法条</span>'
                 ext_html = '<span style="color:#999; font-size:15px;">—</span>'
             
+            # 相似案例（修复*100 + 优化表格UI）
             best = result.get("相似案例")
             if best:
                 case_name = best.get("title", best.get("案例标题", "—"))
+                # 【修复】后端已返回60-100整数，不再*100
                 raw_sim = best.get('similarity', best.get('匹配度', 0))
                 sim_score = f"{raw_sim}%" if isinstance(raw_sim, (int, float)) else "85%"
             else:
@@ -647,6 +592,7 @@ def create_ui():
             
             others = result.get("相似案例列表", [])
             if others:
+                # 【优化】检察院风格表格：白底、细线、匹配度分色
                 cases_html = """
                 <table style='width:100%;font-size:14px;border-collapse:collapse;'>
                     <thead>
@@ -662,13 +608,14 @@ def create_ui():
                     sim_val = c.get('similarity', 0)
                     sim_str = f"{sim_val}%" if isinstance(sim_val, (int, float)) else "80%"
                     
+                    # 匹配度分色：>=90%深绿，>=80%蓝，<80%灰
                     if isinstance(sim_val, (int, float)):
                         if sim_val >= 90:
-                            color = "#2e7d32"
+                            color = "#2e7d32"  # 深绿
                         elif sim_val >= 80:
-                            color = "#1565c0"
+                            color = "#1565c0"  # 蓝
                         else:
-                            color = "#757575"
+                            color = "#757575"  # 灰
                     else:
                         color = "#757575"
                     

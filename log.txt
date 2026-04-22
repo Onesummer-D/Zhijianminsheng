@@ -1,0 +1,17 @@
+nohup: ignoring input
+/root/miniconda3/lib/python3.10/site-packages/sklearn/feature_extraction/text.py:517: UserWarning: The parameter 'token_pattern' will not be used since 'tokenizer' is not None'
+  warnings.warn(
+Building prefix dict from the default dictionary ...
+Loading model from cache /tmp/jieba.cache
+Loading model cost 0.666 seconds.
+Prefix dict has been built successfully.
+/root/zhijianminsheng/single_query_v2.py:358: UserWarning: The parameters have been moved from the Blocks constructor to the launch() method in Gradio 6.0: css. Please pass these parameters to launch() instead.
+  with gr.Blocks(title="智检民声 - 12345涉检线索智能筛查系统", css="""
+2026-04-23 02:51:30,086 - api_client - INFO - DeepSeek客户端初始化完成
+2026-04-23 02:51:30,086 - api_client - INFO - 开始多标签精修分析: 主要类别：刑事犯罪（1分），次要类别：无
+2026-04-23 02:51:30,086 - api_client - INFO - 调用DeepSeek多标签分析API...
+2026-04-23 02:51:39,422 - api_client - INFO - 多标签分析完成: 主=民事支持起诉, 次=['行政执法监督']
+2026-04-23 02:58:02,866 - api_client - INFO - DeepSeek客户端初始化完成
+2026-04-23 02:58:02,867 - api_client - INFO - 开始多标签精修分析: 主要类别：刑事犯罪（1分），次要类别：无
+2026-04-23 02:58:02,867 - api_client - INFO - 调用DeepSeek多标签分析API...
+2026-04-23 02:58:12,032 - api_client - INFO - 多标签分析完成: 主=民事支持起诉, 次=['行政执法监督']

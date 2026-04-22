@@ -234,53 +234,85 @@ def classify_single(text):
     }
 '''
     
-    # 【根治版】点位提取：不再清洗前缀，直接在原文搜索地址模式
+    # 构建点位函数（修复版，增加身份词清洗）
     location_func = '''
 def extract_location(text):
-    """点位提取 - 根治版（直接搜索地址模式，不清洗前缀）"""
+    """点位提取 - 修复版（增加身份词清洗）"""
     if not text:
         return "—"
+    
     import re
     
-    # 地址后缀列表
-    location_suffix = r'(?:村|社区|小区|家园|花园|公寓|路|街|巷|桥|广场|大厦|中心|园|城|码头|河|头|塔|店|馆|站)'
+    # 第一步：清洗前缀（增强版）
+    clean_text = text
     
-    # 模式A：区+镇/街道/乡+地标（最完整，最优先）
-    # 例：房山区长阳镇碧桂园小区、房山区拱辰街道辛庄村
+    # 强力清洗各种前缀
+    prefixes = [
+        r'昨天\\s*', r'前天\\s*',
+        r'我是\\s*', r'他是\\s*', r'她是\\s*',  # 【新增】清洗"我是"
+        r'我在\\s*', r'我们在\\s*', r'来电人\\s*', r'投诉人\\s*',
+        r'公司\\s*在?\\s*', r'工厂\\s*在?\\s*', r'工地\\s*在?\\s*',
+        r'位于\\s*', r'住在?\\s*', r'住\\s*',
+        r'地址是?\\s*', r'在\\s*',
+        r'老板\\s*在?\\s*', r'包工头\\s*在?\\s*', r'负责人\\s*在?\\s*',
+        r'他\\s*在\\s*', r'她\\s*在\\s*'
+    ]
+    
+    for p in prefixes:
+        clean_text = re.sub(p, '', clean_text)
+    
+    # 【关键新增】清洗身份词前缀（农民工、残疾人等）
+    clean_text = re.sub(r'^[我是们]+', '', clean_text)
+    clean_text = re.sub(r'^住', '', clean_text)
+    clean_text = re.sub(r'^农民工[，,、]?\\s*', '', clean_text)  # 清洗"农民工，"
+    clean_text = re.sub(r'^残疾人[，,、]?\\s*', '', clean_text)   # 清洗"残疾人，"
+    clean_text = re.sub(r'^老人[，,、]?\\s*', '', clean_text)     # 清洗"老人，"
+    clean_text = re.sub(r'^工人[，,、]?\\s*', '', clean_text)     # 清洗"工人，"
+    
+    # 第二步：清洗干扰词
+    clean_text = re.sub(r'村委会|居委会', '', clean_text)
+    clean_text = re.sub(r'附近|旁边|周边|有个|有座|底下', '', clean_text)
+    clean_text = re.sub(r'^老板|包工头|负责人|公司|工厂|工地', '', clean_text)
+    
+    # 第三步：先截断文本，防止匹配过长
+    stop_words = r'(?:有人|打架|动刀|流血|给|干|做|是|在|被|把|让|帮|和|与|或|但是|不过|就|都|也|还|要|会|能|可以|因为|所以|如果|虽然|但是)'
+    match_stop = re.search(stop_words, clean_text)
+    if match_stop:
+        clean_text = clean_text[:match_stop.start()]
+    
+    # 第四步：匹配地址
+    location_suffix = r'(?:村|社区|小区|家园|花园|公寓|路|街|巷|桥|广场|大厦|中心|园|城)'
+    
+    # 模式A：区+镇/街道+地标
     pattern_a = r'([一-龥]{2,4}区)([一-龥]{2,6}(?:镇|街道|乡))([一-龥]{2,8}' + location_suffix + r')?'
-    match = re.search(pattern_a, text)
+    match = re.search(pattern_a, clean_text)
     if match:
         addr = ''.join(filter(None, match.groups()))
-        if 4 <= len(addr) <= 22:
+        if 4 <= len(addr) <= 20:
             return addr
     
-    # 模式A2：区+镇/街道/乡（无地标）
-    # 例：房山区阎村镇、房山区佛子庄乡
-    pattern_a2 = r'([一-龥]{2,4}区)([一-龥]{2,6}(?:镇|街道|乡))'
-    match = re.search(pattern_a2, text)
+    # 模式A2：区名（无"区"字）+ 镇/街道
+    pattern_a2 = r'([一-龥]{2,4})([一-龥]{2,6}(?:镇|街道|乡))'
+    match = re.search(pattern_a2, clean_text)
     if match:
         addr = ''.join(match.groups())
-        if 4 <= len(addr) <= 12:
+        if 4 <= len(addr) <= 12 and not addr[0].isdigit():
             return addr
     
-    # 模式B：镇/街道/乡+地标（无区）
-    # 例：长阳镇张家场村、拱辰街道良乡大学城小区
+    # 模式B：镇/街道+地标（无区）
     pattern_b = r'([一-龥]{2,6}(?:镇|街道|乡))([一-龥]{2,8}' + location_suffix + r')'
-    match = re.search(pattern_b, text)
+    match = re.search(pattern_b, clean_text)
     if match:
         addr = ''.join(match.groups())
         if 4 <= len(addr) <= 16:
             return addr
     
-    # 模式C：区+2-6字地标（宽松兜底，如"房山区长阳码头"）
-    pattern_c = r'([一-龥]{2,4}区)([一-龥]{2,6})'
-    match = re.search(pattern_c, text)
+    # 兜底：区+镇/街道
+    fallback = r'([一-龥]{2,4}区)([一-龥]{2,6}(?:镇|街道|乡))'
+    match = re.search(fallback, clean_text)
     if match:
         addr = ''.join(match.groups())
-        if 4 <= len(addr) <= 12:
-            # 简单过滤：排除明显非地名的词
-            if not re.search(r'(?:开始|就是|住在|我在|我们|他们|你们|政府|但是|不过)', addr):
-                return addr
+        return addr if len(addr) >= 4 else "—"
     
     return "—"
 '''

@@ -27,58 +27,6 @@ except ImportError as e:
     print(f"❌ 规则引擎加载失败: {e}")
     sys.exit(1)
 
-# ========== 【覆盖】独立的点位提取函数（根治版） ==========
-def extract_location(text):
-    """点位提取 - 清洗版（找到房山区，返回前清洗后缀冗余）"""
-    if not text:
-        return "—"
-    import re
-    
-    idx = text.find("房山区")
-    if idx == -1:
-        return "—"
-    
-    search_text = text[idx:idx+25]
-    suffix = r'(?:村|社区|小区|家园|花园|公寓|路|街|巷|桥|广场|大厦|中心|园|城|码头|河|头|塔|店|馆|站|乡|镇|街道)'
-    
-    # 模式1：区+镇/街道/乡+地标
-    m = re.search(r'(房山区)([一-龥]{2,6}(?:镇|街道|乡))([一-龥]{2,8}' + suffix + r')?', search_text)
-    if m:
-        addr = ''.join(filter(None, m.groups()))
-        if 4 <= len(addr) <= 22:
-            # 【清洗】去掉末尾"的村"、"的路"等冗余
-            addr = re.sub(r'的(村|路|街|巷|桥|广场|大厦|中心|园|城|码头|河|头|塔|店|馆|站|乡|镇|街道|社区|小区|家园|花园|公寓)$', r'\1', addr)
-            # 【清洗】去重后缀（路路→路，村村→村）
-            addr = re.sub(r'(村|路|街|巷|桥|广场|大厦|中心|园|城|码头|河|头|塔|店|馆|站|乡|镇|街道)\1+$', r'\1', addr)
-            return addr
-    
-    # 模式2：区+镇/街道/乡
-    m = re.search(r'(房山区)([一-龥]{2,6}(?:镇|街道|乡))', search_text)
-    if m:
-        addr = ''.join(m.groups())
-        if 4 <= len(addr) <= 12:
-            return addr
-    
-    # 模式3：镇/街道/乡+地标（无区）
-    m = re.search(r'([一-龥]{2,6}(?:镇|街道|乡))([一-龥]{2,8}' + suffix + r')', search_text)
-    if m:
-        addr = ''.join(m.groups())
-        if 4 <= len(addr) <= 16:
-            addr = re.sub(r'的(村|路|街|巷|桥|广场|大厦|中心|园|城|码头|河|头|塔|店|馆|站|乡|镇|街道|社区|小区|家园|花园|公寓)$', r'\1', addr)
-            addr = re.sub(r'(村|路|街|巷|桥|广场|大厦|中心|园|城|码头|河|头|塔|店|馆|站|乡|镇|街道)\1+$', r'\1', addr)
-            return addr
-    
-    # 模式4：区+2-6字（兜底）
-    m = re.search(r'(房山区)([一-龥]{2,6})', search_text)
-    if m:
-        addr = ''.join(m.groups())
-        if 4 <= len(addr) <= 12:
-            addr = re.sub(r'的(村|路|街|巷|桥|广场|大厦|中心|园|城|码头|河|头|塔|店|馆|站|乡|镇|街道|社区|小区|家园|花园|公寓)$', r'\1', addr)
-            addr = re.sub(r'(村|路|街|巷|桥|广场|大厦|中心|园|城|码头|河|头|塔|店|馆|站|乡|镇|街道)\1+$', r'\1', addr)
-            return addr
-    
-    return "—"
-
 LEGAL_BASIS = {}
 
 def load_legal_basis():
@@ -107,8 +55,8 @@ def get_similar_cases(category: str, text: str = ""):
 
 # ========== 【新增】热重载关键词库（无需重启服务） ==========
 def reload_rule_engine():
-    """每次分析前强制重新加载最新关键词库（不覆盖点位函数）"""
-    global KEYWORDS_DB, calculate_confidence, classify_single, CATEGORY_PRIORITY
+    """每次分析前强制重新加载最新关键词库"""
+    global KEYWORDS_DB, calculate_confidence, classify_single, extract_location, CATEGORY_PRIORITY
     if 'rule_engine_keywords' in sys.modules:
         del sys.modules['rule_engine_keywords']
     try:
@@ -116,10 +64,11 @@ def reload_rule_engine():
         KEYWORDS_DB = rule.KEYWORDS_DB
         calculate_confidence = rule.calculate_confidence
         classify_single = rule.classify_single
-        # 【关键】不再覆盖 extract_location，保留 single_query_v2.py 里定义的根治版
+        extract_location = rule.extract_location
         CATEGORY_PRIORITY = rule.CATEGORY_PRIORITY
     except Exception as e:
         print(f"⚠️ 关键词库重载失败: {e}")
+
 # ========== 【修复版 analyze_real】 ==========#
 def analyze_real(text):
     try:
@@ -144,11 +93,8 @@ def analyze_real(text):
             result = calculate_confidence(text, cat)
             score = result.get("score", 0)
             all_scores[cat] = score
-            # 【修复】calculate_confidence 返回的是 matched_core / matched_feature
-            if result.get("matched_core"):
-                matched_keywords.extend(result["matched_core"])
-            if result.get("matched_feature"):
-                matched_keywords.extend([f"{m}(特征)" for m in result["matched_feature"]])
+            if result.get("matched_keywords"):
+                matched_keywords.extend(result.get("matched_keywords"))
             for w in result.get("exclude_hits", []):
                 all_exclude_hits.add(w)
         
