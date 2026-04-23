@@ -22,23 +22,12 @@ from single_query_v2 import (
     get_laws_for_category,
     get_similar_cases,
     LEGAL_BASIS,
-    MATCHER,
-    sort_laws_by_match
+    MATCHER
 )
 print("✅ 已导入 single_query_v2 完整分析模块")
 
-from extract_elements import auto_extract, format_elements
-
 # ==================== 合并CSS：首页 + 单条查询原版 + 批量 ====================
-
 CUSTOM_CSS = """
-/* === 全局干掉Gradio默认focus橘色/蓝色框 === */
-*:focus, *:focus-visible, *:active { outline: none !important; box-shadow: none !important; }
-.gr-box, .gr-button, .gr-form, .gr-panel, div[role="button"], button, select, input, tr { 
-    outline: none !important; box-shadow: none !important; 
-}
-/* ========================================== */
-
 /* ========== 首页 ========== */
 .home-wrap {
     background: linear-gradient(180deg, #d4e9f7 0%, #eef6fc 40%, #ffffff 100%);
@@ -131,54 +120,41 @@ h3 {
 .nav-back { margin-bottom: 8px !important; max-width: 140px !important; }
 .nav-back button { font-size: 16px !important; padding: 6px 14px !important; }
 
-/* ========== 批量筛查：File组件去橘色框 + 隐藏上传提示 ========== */
-.clean-file .file-upload,
-.clean-file .upload-container,
-.clean-file > div:first-child,
-.clean-file .wrap {
-    background: #fafafa !important;
-    border: 1px dashed #ccc !important;
+/* ========== 去掉File组件橘色框 ========== */
+.clean-file .file-preview,
+.clean-file .file-display {
+    background: transparent !important;
+    border: 1px solid #e0e0e0 !important;
     box-shadow: none !important;
-    border-radius: 4px !important;
 }
-.clean-file .file-upload:hover,
-.clean-file .upload-container:hover {
-    background: #f5f5f5 !important;
-    border-color: #999 !important;
-}
-.clean-file .upload-text,
-.clean-file .file-upload h3,
-.clean-file .file-upload p,
-.clean-file [class*="upload"] h3,
-.clean-file [class*="upload"] p {
-    display: none !important;
-}
-.clean-file .file-upload {
-    min-height: 60px !important;
-    padding: 8px !important;
+.clean-file {
+    border: 1px dashed #ccc !important;
+    background: #fafafa !important;
 }
 
-/* 全局File组件去橘色框 */
-[data-testid="file"] .upload-container,
-[data-testid="file"] > div:first-child {
-    background: #fafafa !important;
-    border: 1px dashed #ccc !important;
-    box-shadow: none !important;
-    border-radius: 4px !important;
-}
-[data-testid="file"] .upload-container:hover {
-    background: #f5f5f5 !important;
-    border-color: #999 !important;
-}
-[data-testid="file"] .upload-text,
-[data-testid="file"] h3,
-[data-testid="file"] p {
+/* ========== 隐藏 Tabs 导航栏（多选择器覆盖所有 Gradio 版本） ========== */
+.hidden-tabs > .tab-nav,
+.hidden-tabs > .tabs-nav,
+.hidden-tabs [role="tablist"],
+.hidden-tabs .tabmenu,
+.hidden-tabs .tab-buttons,
+.hidden-tabs > div:first-child:has(>button) {
     display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
 }
-[data-testid="file"] {
-    min-height: 60px !important;
+.hidden-tabs {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
 }
-"""
+.hidden-tabs .tabitem {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+}"""
+
 # ==================== 测试用例 ====================
 TEST_CASES = {
     "💰 讨薪案例": "我是农民工，老板在房山区长阳镇碧桂园小区拖欠我们工资半年了，一共欠了8万多，实在没办法了",
@@ -211,19 +187,13 @@ def build_single_query():
             sec_slots = min(len(secondary_cats) * 2, 2)
             pri_slots = 6 - sec_slots
             
-            # 【关键修复】用法条匹配度排序，不再直接取前几条
-            match_text = f"{result.get('核心定性词', '')} {text[:60]}"
-            
             p_laws = get_laws_for_category(primary_cat)
-            p_default_sorted = sort_laws_by_match(p_laws.get("default", []), match_text)
-            p_extended_sorted = sort_laws_by_match(p_laws.get("extended", []), match_text)
-            
-            for item in p_default_sorted[:pri_slots]:
+            for item in p_laws.get("default", [])[:pri_slots]:
                 item_id = item.get('编号', item.get('title', str(item)))
                 if item_id not in seen_ids:
                     seen_ids.add(item_id)
                     combined_laws["default"].append(item)
-            for item in p_extended_sorted[:2]:
+            for item in p_laws.get("extended", [])[:2]:
                 item_id = item.get('编号', item.get('title', str(item)))
                 if item_id not in seen_ids:
                     seen_ids.add(item_id)
@@ -233,18 +203,7 @@ def build_single_query():
                 per_sec = max(1, sec_slots // len(secondary_cats))
                 for sec_cat in secondary_cats:
                     s_laws = get_laws_for_category(sec_cat)
-                    s_default_sorted = sort_laws_by_match(s_laws.get("default", []), match_text)
-                    s_extended_sorted = sort_laws_by_match(s_laws.get("extended", []), match_text)
-                    for item in s_default_sorted[:per_sec]:
-                        item_id = item.get('编号', item.get('title', str(item)))
-                        if item_id not in seen_ids:
-                            seen_ids.add(item_id)
-                            combined_laws["default"].append(item)
-                    for item in s_extended_sorted[:1]:
-                        item_id = item.get('编号', item.get('title', str(item)))
-                        if item_id not in seen_ids:
-                            seen_ids.add(item_id)
-                            combined_laws["extended"].append(item)
+                    for item in s_laws.get("default", [])[:per_sec]:
                         item_id = item.get('编号', item.get('title', str(item)))
                         if item_id not in seen_ids:
                             seen_ids.add(item_id)
@@ -281,7 +240,8 @@ def build_single_query():
         if best:
             case_name = best.get("title", best.get("案例标题", "—"))
             raw_sim = best.get('similarity', best.get('匹配度', 0))
-            sim_score = f"{raw_sim}%" if isinstance(raw_sim, (int, float)) else "85%"
+            sim_score = f
+            "{raw_sim}%" if isinstance(raw_sim, (int, float)) else "85%"
         else:
             case_name = "—"
             sim_score = "—"
@@ -335,8 +295,7 @@ def build_single_query():
             case_name, 
             sim_score, 
             cases_html, 
-            result["双引擎详情"],
-            result.get("要素提取", "—")
+            result["双引擎详情"]
         ]
     
     def clear():
@@ -346,8 +305,7 @@ def build_single_query():
             '<span style="color:#999; font-size:15px;">—</span>',
             "—", "—", 
             "<span style='color:#999; font-size:14px;'>等待分析...</span>",
-            "等待分析...",
-            "—"
+            "等待分析..."
         ]
 
     # --- UI组件（完全复制原版布局） ---
@@ -364,8 +322,8 @@ def build_single_query():
                 )
                 
                 with gr.Row():
-                    analyze_btn = gr.Button("开始分析", variant="primary", scale=2)
-                    clear_btn = gr.Button("清空", scale=1)
+                    analyze_btn = gr.Button("🔍 开始分析", variant="primary", scale=2)
+                    clear_btn = gr.Button("🔄 清空", scale=1)
                 
                 gr.Markdown("### 🧪 快速测试")
                 with gr.Row():
@@ -450,15 +408,6 @@ def build_single_query():
                 
                 with gr.Accordion("📂 查看更多相似案例（Top 3）", open=False):
                     similar_cases_list = gr.HTML(label="", show_label=False)
-
-                with gr.Accordion("📋 要素提取（结构化信息）", open=False):
-                    elements_box = gr.Textbox(
-                        label="", 
-                        interactive=False, 
-                        lines=5, 
-                        show_label=False,
-                        elem_classes=["output-box"]
-                    )
                 
                 with gr.Accordion("🔧 双引擎判定详情（技术调试）", open=False):
                     detail = gr.Textbox(
@@ -473,8 +422,7 @@ def build_single_query():
             main_cat, second_cat, conf_level, suggestion, keywords, location,
             laws, ext_laws,
             similar_case, similarity_score, similar_cases_list,
-            detail,
-            elements_box
+            detail
         ]
         
         analyze_btn.click(fn=on_analyze, inputs=input_text, outputs=outputs)
@@ -498,67 +446,12 @@ HISTORY_DIR = "./history"
 os.makedirs(HISTORY_DIR, exist_ok=True)
 
 def desensitize_text(text):
-    """数据脱敏：展示层调用（仅手机+身份证，避免正文被误伤）"""
+    """数据脱敏：展示层调用"""
     import re
     text = re.sub(r'(\d{3})\d{4}(\d{4})', r'\1****\2', text)
     text = re.sub(r'(\d{6})\d{8}(\d{4})', r'\1********\2', text)
-    # 人名脱敏已关闭：原正则 r'([一-龥]{1})([一-龥]{1,2})' 会把"老板""工资""房山区"等正文词误脱敏
-    # 如需人名脱敏，建议匹配"我是/我叫/来电人：XXX"等明确前缀，而非全局替换
+    text = re.sub(r'([一-龥]{1})([一-龥]{1,2})(?![一-龥])', lambda m: m.group(1)+'*'*len(m.group(2)), text)
     return text
-
-# 【新增】基于命中核心词自动选择最匹配法条（从法条编号提取罪名关键词，非硬编码）
-def select_best_law(category, core_words_text, all_laws_db):
-    """自动从法条库中选择最匹配的法条编号。逻辑：从法条编号提取'XX罪'等关键词，
-    与工单命中核心词做匹配，避免总是返回 default 列表的第一条。"""
-    if not category or category == "非涉检" or not core_words_text:
-        return "—"
-    
-    import re
-    laws = all_laws_db.get(category, {})
-    items = laws.get("default", []) + laws.get("extended", [])
-    if not items:
-        return "—"
-    
-    text = str(core_words_text)
-    best_item = items[0]
-    best_score = -1
-    
-    for item in items:
-        number = item.get("编号", "")
-        content = item.get("内容", "")
-        if not number:
-            continue
-        
-        score = 0
-        
-        # 1. 从法条编号自动提取"XX罪"关键词（如"诈骗罪"→"诈骗"）
-        crime_names = re.findall(r'([\u4e00-\u9fa5]{2,12})罪', number)
-        for cname in crime_names:
-            if cname in text:
-                score += 20  # 完整罪名匹配，最高分
-            else:
-                # 拆字匹配：如"盗窃"拆成"盗""窃"
-                for char in cname:
-                    if char in text:
-                        score += 3
-        
-        # 2. 公益诉讼/行政场景辅助匹配
-        if category == "公益诉讼":
-            if any(w in content for w in ["环境", "污染", "生态"]):
-                if any(w in text for w in ["污染", "臭", "污水", "垃圾", "烧", "刺鼻"]):
-                    score += 5
-            if any(w in content for w in ["文物", "文化"]):
-                if any(w in text for w in ["文物", "拓印", "刻字", "遗址", "塔", "宅"]):
-                    score += 5
-            if any(w in content for w in ["野生动物", "狩猎", "渔业"]):
-                if any(w in text for w in ["鸟", "猎", "捕", "鱼", "电鱼"]):
-                    score += 5
-        
-        if score > best_score:
-            best_score = score
-            best_item = item
-    
-    return best_item.get("编号", "—")
 
 def analyze_batch_rule_only(text):
     """纯规则引擎分析（批量筛查专用，B无卡可跑）"""
@@ -598,7 +491,7 @@ def analyze_batch_rule_only(text):
         return {
             "主要类别": "非涉检", "次要类别": "无", "置信度等级": "低",
             "建议操作": "无需检察介入", "核心定性词": "无", "点位": "—",
-            "命中核心词": "无", "命中特征词": "无", "相似案例": "—", "关联法条": "—", "得分": 0,"要素提取": "—"
+            "命中核心词": "无", "命中特征词": "无", "相似案例": "—", "关联法条": "—", "得分": 0
         }
     
     conf = rule.calculate_confidence(text, main_cat)
@@ -628,16 +521,9 @@ def analyze_batch_rule_only(text):
         loc = extract_location(text)
     except:
         loc = "—"
-
-    # 伪RAG - 只取案例名，丢弃案例自带法条
-    sim_case, _ = find_similar_case(text, main_cat, second_cat)
     
-    # 【关键修复】基于命中核心词自动选择最匹配法条（不再总是取 default[0]）
-    core_words_text = f"{'、'.join(core)} {'、'.join(feat)}"
-    sim_law = select_best_law(main_cat, core_words_text, LEGAL_BASIS)
-
-    # 【新增】要素提取（拖欠工资/环境污染等结构化信息）
-    elements = auto_extract(text, main_cat)
+    # 伪RAG
+    sim_case, sim_law = find_similar_case(text, main_cat, second_cat)
     
     if score >= 6:
         suggestion = "🟢 建议优先处理"
@@ -660,46 +546,21 @@ def analyze_batch_rule_only(text):
         "命中特征词": "、".join(feat) if feat else "无",
         "相似案例": sim_case,
         "关联法条": sim_law,
-        "要素提取": format_elements(elements),
         "得分": score
     }
 
-def load_history(filename, filter_cat="全部", filter_loc="全部", filter_conf="全部"):
+def load_history(filename):
     cols = ["工单编号", "主要类别", "置信度", "点位"]
     if not filename:
         return pd.DataFrame(columns=cols)
     path = os.path.join(HISTORY_DIR, filename)
-    if not os.path.exists(path):
-        return pd.DataFrame(columns=cols)
-    
-    df = pd.read_excel(path)
-    for c in cols:
-        if c not in df.columns:
-            df[c] = "—"
-    
-    # 类别筛选
-    if filter_cat != "全部" and "主要类别" in df.columns:
-        df = df[df["主要类别"] == filter_cat]
-    
-    # 点位筛选
-    if filter_loc != "全部" and "点位" in df.columns:
-        if filter_loc == "有点位":
-            df = df[~df["点位"].isin(["—", "⚠️ 点位缺失", "None", ""])]
-        elif filter_loc == "无点位":
-            df = df[df["点位"].isin(["—", "⚠️ 点位缺失", "None", ""])]
-        elif filter_loc == "同地址聚合":
-            addr_counts = df["点位"].value_counts()
-            dup_addrs = addr_counts[addr_counts > 1].index.tolist()
-            df = df[df["点位"].isin(dup_addrs)]
-    
-    # 置信度筛选（按emoji匹配 🟢高/🟡中/🔴低）
-    if filter_conf != "全部" and "置信度" in df.columns:
-        emoji_map = {"高": "🟢", "中": "🟡", "低": "🔴"}
-        emoji = emoji_map.get(filter_conf, "")
-        if emoji:
-            df = df[df["置信度"].astype(str).str.contains(emoji, na=False)]
-    
-    return df[cols] if not df.empty else pd.DataFrame(columns=cols)
+    if os.path.exists(path):
+        df = pd.read_excel(path)
+        for c in cols:
+            if c not in df.columns:
+                df[c] = "—"
+        return df[cols]
+    return pd.DataFrame(columns=cols)
 
 def export_df(full_df):
     if full_df is None or len(full_df) == 0:
@@ -710,19 +571,18 @@ def export_df(full_df):
 
 
 # ========== 批量筛查 UI（修复版） ==========
-# ========== 批量筛查 UI（修复版） ==========
 def build_batch_screening():
     with gr.Column():
         with gr.Row():
-            with gr.Column(scale=1):
+            with gr.Column(scale=3):
                 gr.Markdown("## 📁 批量工单筛查")
             with gr.Column(scale=1):
                 gr.Markdown("## 📜 筛查台账")
         
         with gr.Row():
-            with gr.Column(scale=1):
+            with gr.Column(scale=3):
                 batch_file = gr.File(
-                    show_label=False,
+                    label="上传Excel（需含'工单内容'或'主要内容'列）", 
                     file_types=[".xlsx"],
                     elem_classes=["clean-file"]
                 )
@@ -731,35 +591,18 @@ def build_batch_screening():
                     only_loc_chk = gr.Checkbox(label="🔍 只看含点位工单", value=False)
                     use_api_chk = gr.Checkbox(label="🤖 启用DeepSeek API复核（演示模式）", value=False)
                 
-                with gr.Row():
-                    analyze_btn = gr.Button("开始批量筛查", variant="primary", scale=2)
-                    export_btn = gr.Button("导出当前结果Excel", variant="secondary", scale=1)
-                
+                analyze_btn = gr.Button("🚀 开始批量筛查", variant="primary")
                 status_txt = gr.Textbox(label="执行状态", interactive=False)
-                export_file = gr.File(label="下载导出文件", interactive=False)
+                
+                with gr.Row():
+                    export_btn = gr.Button("📥 导出当前结果Excel")
+                    export_file = gr.File(label="下载导出文件", interactive=False)
             
             with gr.Column(scale=1):
                 history_dd = gr.Dropdown(label="选择历史记录", choices=[], interactive=True, value=None)
-                
-                # ===== 新增：筛选器 =====
                 with gr.Row():
-                    filter_cat = gr.Dropdown(
-                        choices=["全部", "刑事犯罪", "公益诉讼", "民事支持起诉", "行政执法监督"], 
-                        value="全部", label="类别筛选", scale=1
-                    )
-                    filter_loc = gr.Dropdown(
-                        choices=["全部", "有点位", "无点位", "同地址聚合"], 
-                        value="全部", label="点位筛选", scale=1
-                    )
-                    filter_conf = gr.Dropdown(
-                        choices=["全部", "高", "中", "低"], 
-                        value="全部", label="置信度筛选", scale=1
-                    )
-                # =======================
-                
-                with gr.Row():
-                    load_hist_btn = gr.Button("加载选中类别", scale=1)
-                    refresh_hist_btn = gr.Button("更新文件列表", scale=1)
+                    load_hist_btn = gr.Button("加载选中记录", scale=1)
+                    refresh_hist_btn = gr.Button("🔄 刷新", scale=1)
                 hist_preview = gr.DataFrame(
                     label="历史记录预览",
                     interactive=False,
@@ -772,7 +615,7 @@ def build_batch_screening():
         
         result_table = gr.DataFrame(
             label="结果列表",
-            headers=["工单编号", "工单内容", "主要类别", "次要类别", "置信度", "点位标记", "重复次数", "命中核心词", "相似案例", "关联法条", "要素提取"],
+            headers=["工单编号", "工单内容", "主要类别", "次要类别", "置信度", "点位标记", "重复次数", "命中核心词", "相似案例", "关联法条"],
             interactive=False,
             value=[]
         )
@@ -780,7 +623,7 @@ def build_batch_screening():
         full_data_state = gr.DataFrame(visible=False)
         
         def run_batch(file_obj, only_with_location, use_api):
-            empty_cols = ["工单编号", "工单内容", "主要类别", "次要类别", "置信度", "点位标记", "重复次数", "命中核心词", "相似案例", "关联法条","要素提取"]
+            empty_cols = ["工单编号", "工单内容", "主要类别", "次要类别", "置信度", "点位标记", "重复次数", "命中核心词", "相似案例", "关联法条"]
             
             if file_obj is None:
                 return pd.DataFrame(columns=empty_cols), "请先上传Excel", None, gr.update(choices=[]), pd.DataFrame()
@@ -805,45 +648,22 @@ def build_batch_screening():
                     continue
                 
                 if use_api:
-                    # 【关键修复】先跑纯规则做初筛，0分直接过滤，禁止API救回非涉检工单
-                    rule_r = analyze_batch_rule_only(text)
-                    
-                    if rule_r["主要类别"] == "非涉检":
-                        # 纯规则已明确非涉检，跳过API，避免DeepSeek过度联想
-                        res = {
-                            "工单编号": row.get('工单编号', f'NO.{idx+1:03d}'),
-                            "工单内容": desensitize_text(text[:60] + "..." if len(text) > 60 else text),
-                            "主要类别": "非涉检",
-                            "次要类别": "无",
-                            "置信度": "⚪ 非涉检线索",
-                            "得分": 0,
-                            "点位": "—",
-                            "命中核心词": "无",
-                            "命中特征词": "无",
-                            "是否涉检": "否",
-                            "相似案例": "—",
-                            "关联法条": "—",
-                            "要素提取": rule_r["要素提取"]
-                        }
-                    else:
-                        # 纯规则命中涉检，才调API做精修（多标签/交叉线索）
-                        from single_query_v2 import analyze_real
-                        r = analyze_real(text)
-                        res = {
-                            "工单编号": row.get('工单编号', f'NO.{idx+1:03d}'),
-                            "工单内容": desensitize_text(text[:60] + "..." if len(text) > 60 else text),
-                            "主要类别": r.get("主要类别", "非涉检"),
-                            "次要类别": r.get("次要类别", "无"),
-                            "置信度": r.get("置信度等级", "—"),
-                            "得分": 0,
-                            "点位": r.get("点位", "—"),
-                            "命中核心词": r.get("核心定性词", "无"),
-                            "命中特征词": "无",
-                            "是否涉检": "否" if "非涉检" in r.get("主要类别", "") else "是",
-                            "相似案例": r.get("相似案例", {}).get("title", "—") if isinstance(r.get("相似案例"), dict) else "—",
-                            "关联法条": "—",
-                            "要素提取": format_elements(auto_extract(text, r.get("主要类别", "非涉检")))
-                        }
+                    from single_query_v2 import analyze_real
+                    r = analyze_real(text)
+                    res = {
+                        "工单编号": row.get('工单编号', f'NO.{idx+1:03d}'),
+                        "工单内容": desensitize_text(text[:60] + "..." if len(text) > 60 else text),
+                        "主要类别": r.get("主要类别", "非涉检"),
+                        "次要类别": r.get("次要类别", "无"),
+                        "置信度": r.get("置信度等级", "—"),
+                        "得分": 0,
+                        "点位": r.get("点位", "—"),
+                        "命中核心词": r.get("核心定性词", "无"),
+                        "命中特征词": "无",
+                        "是否涉检": "否" if "非涉检" in r.get("主要类别", "") else "是",
+                        "相似案例": r.get("相似案例", {}).get("title", "—") if isinstance(r.get("相似案例"), dict) else "—",
+                        "关联法条": "—"
+                    }
                 else:
                     r = analyze_batch_rule_only(text)
                     res = {
@@ -858,8 +678,7 @@ def build_batch_screening():
                         "命中特征词": r["命中特征词"],
                         "是否涉检": "是" if r["主要类别"] != "非涉检" else "否",
                         "相似案例": r["相似案例"],
-                        "关联法条": r["关联法条"],
-                        "要素提取": r["要素提取"]
+                        "关联法条": r["关联法条"]
                     }
                 results.append(res)
             
@@ -883,7 +702,7 @@ def build_batch_screening():
             else:
                 result_df = pd.DataFrame(columns=[
                     "工单编号", "工单内容", "主要类别", "次要类别", "置信度", "点位", "重复次数", "点位标记",
-                    "命中核心词", "命中特征词", "是否涉检", "相似案例", "关联法条", "得分","要素提取"
+                    "命中核心词", "命中特征词", "是否涉检", "相似案例", "关联法条", "得分"
                 ])
             
             # 点位筛选
@@ -907,7 +726,7 @@ def build_batch_screening():
             if display_df.empty:
                 show_df = pd.DataFrame(columns=empty_cols)
             else:
-                show_df = display_df[["工单编号", "工单内容", "主要类别", "次要类别", "置信度", "点位标记", "重复次数", "命中核心词", "相似案例", "关联法条", "要素提取"]].copy()
+                show_df = display_df[["工单编号", "工单内容", "主要类别", "次要类别", "置信度", "点位标记", "重复次数", "命中核心词", "相似案例", "关联法条"]].copy()
             
             return show_df, stats, None, gr.update(choices=history_files, value=history_files[0] if history_files else None), result_df
         
@@ -924,10 +743,9 @@ def build_batch_screening():
             outputs=export_file
         )
         
-        # 【修改】加载历史记录时传入筛选器
         load_hist_btn.click(
             fn=load_history,
-            inputs=[history_dd, filter_cat, filter_loc, filter_conf],
+            inputs=history_dd,
             outputs=hist_preview
         )
         
@@ -940,66 +758,73 @@ def build_batch_screening():
             outputs=history_dd
         )
 
-# 主程序入口（Column visible 切换版 - 稳定可用）
+
+# ============================================================
+# 主程序入口（Tabs 页面切换版）
 # ============================================================
 with gr.Blocks(css=CUSTOM_CSS, title="智检民声 - 12345涉检线索智能筛查系统") as demo:
 
-    # --- 首页 ---
-    with gr.Column(visible=True, elem_classes="home-wrap") as page_home:
-        gr.Markdown("""
-        <div class="home-title">
-            <h1>智检民声</h1>
-            <p>12345涉检线索智能筛查系统</p>
-        </div>
-        """)
-        with gr.Row(elem_classes="home-cards"):
-            with gr.Column(elem_classes="home-card"):
+    with gr.Tabs(elem_classes=["hidden-tabs"]) as tabs:
+
+        # --- Tab 0: 首页 ---
+        with gr.TabItem("首页", id=0):
+            with gr.Column(elem_classes="home-wrap"):
                 gr.Markdown("""
-                <h2>📊 批量筛查</h2>
-                <div class="home-card-desc">
-                上传Excel工单表格，系统自动批量识别涉检线索、分类标注、提取点位，一键导出筛查报告。
+                <div class="home-title">
+                    <h1>智检民声</h1>
+                    <p>12345涉检线索智能筛查系统</p>
                 </div>
                 """)
-                btn_to_batch = gr.Button("进入批量筛查 →", variant="primary")
-            with gr.Column(elem_classes="home-card"):
-                gr.Markdown("""
-                <h2>🔍 单条查询</h2>
-                <div class="home-card-desc">
-                输入单条12345工单内容，实时分析线索类别、置信度等级、关联法条及相似案例匹配。
-                </div>
-                """)
-                btn_to_single = gr.Button("进入单条查询 →", variant="primary")
+                with gr.Row(elem_classes="home-cards"):
+                    with gr.Column(elem_classes="home-card"):
+                        gr.Markdown("""
+                        <h2>📊 批量筛查</h2>
+                        <div class="home-card-desc">
+                        上传Excel工单表格，系统自动批量识别涉检线索、分类标注、提取点位，一键导出筛查报告。
+                        </div>
+                        """)
+                        btn_to_batch = gr.Button("进入批量筛查 →", variant="primary")
+                    with gr.Column(elem_classes="home-card"):
+                        gr.Markdown("""
+                        <h2>🔍 单条查询</h2>
+                        <div class="home-card-desc">
+                        输入单条12345工单内容，实时分析线索类别、置信度等级、关联法条及相似案例匹配。
+                        </div>
+                        """)
+                        btn_to_single = gr.Button("进入单条查询 →", variant="primary")
 
-    # --- 单条查询页 ---
-    with gr.Column(visible=False) as page_single:
-        with gr.Row():
-            with gr.Column(scale=1):
-                btn_back_1 = gr.Button("← 返回首页", size="sm", elem_classes="nav-back")
-            with gr.Column(scale=6):
-                gr.Markdown("")
-        build_single_query()
+        # --- Tab 1: 单条查询 ---
+        with gr.TabItem("单条", id=1):
+            with gr.Row():
+                with gr.Column(scale=1):
+                    btn_back_1 = gr.Button("← 返回首页", size="sm", elem_classes="nav-back")
+                with gr.Column(scale=6):
+                    gr.Markdown("")
+            build_single_query()
 
-    # --- 批量筛查页 ---
-    with gr.Column(visible=False) as page_batch:
-        with gr.Row():
-            with gr.Column(scale=1):
-                btn_back_2 = gr.Button("← 返回首页", size="sm", elem_classes="nav-back")
-            with gr.Column(scale=6):
-                gr.Markdown("")
-        build_batch_screening()
+        # --- Tab 2: 批量筛查 ---
+        with gr.TabItem("批量", id=2):
+            with gr.Row():
+                with gr.Column(scale=1):
+                    btn_back_2 = gr.Button("← 返回首页", size="sm", elem_classes="nav-back")
+                with gr.Column(scale=6):
+                    gr.Markdown("")
+            build_batch_screening()
 
-    # --- 页面切换 ---
-    def switch(page):
-        return [
-            gr.update(visible=(page == "home")),
-            gr.update(visible=(page == "single")),
-            gr.update(visible=(page == "batch"))
-        ]
+    # --- 页面切换事件 ---
+    def go_home():
+        return gr.Tabs.update(selected=0)
 
-    btn_to_single.click(lambda: switch("single"), None, [page_home, page_single, page_batch])
-    btn_to_batch.click( lambda: switch("batch"),  None, [page_home, page_single, page_batch])
-    btn_back_1.click(   lambda: switch("home"),   None, [page_home, page_single, page_batch])
-    btn_back_2.click(   lambda: switch("home"),   None, [page_home, page_single, page_batch])
+    def go_single():
+        return gr.Tabs.update(selected=1)
+
+    def go_batch():
+        return gr.Tabs.update(selected=2)
+
+    btn_to_single.click(go_single, outputs=tabs)
+    btn_to_batch.click(go_batch, outputs=tabs)
+    btn_back_1.click(go_home, outputs=tabs)
+    btn_back_2.click(go_home, outputs=tabs)
 
 
 if __name__ == "__main__":
