@@ -1,11 +1,11 @@
-import jieba
-import re
-
 """
 关键词库 - 从Excel自动生成（双层级权重）
 核心定性词匹配：+3分
 特征词匹配：+1分
 """
+
+import jieba
+import re
 
 KEYWORDS_DB = {
     "刑事犯罪": {
@@ -110,7 +110,10 @@ KEYWORDS_DB = {
             "重复投诉": 3,
             "持续污染": 3,
             "群体性事件": 3,
-            "国有资产流失": 3
+            "国有资产流失": 3,
+            "多次反映": 3,
+            "一直没人管": 3,
+            "大家都投诉": 3
         },
         "特征词": {
             "河水发黑发臭": 1,
@@ -150,9 +153,6 @@ KEYWORDS_DB = {
             "非法倾倒建筑生活垃圾": 1,
             "惩罚性赔偿金": 1,
             "化工厂排污致饮用水源污染": 1,
-            "多次反映": 1,
-            "一直没人管": 1,
-            "大家都投诉": 1,
             "环境污染严重": 1
         },
         "对应部门": "检察院、公益诉讼、起诉、检察建议、环境督察\n"
@@ -182,10 +182,15 @@ KEYWORDS_DB = {
             "恶意欠薪": 3,
             "拒不支付劳动报酬": 3,
             "农民工工资": 3,
-            "劳务费": 3
+            "劳务费": 3,
+            "农民工": 3,
+            "拖欠工资": 3,
+            "讨薪": 3,
+            "干完活不给钱": 3,
+            "拿不到工资": 3,
+            "找不到老板": 3
         },
         "特征词": {
-            "农民工": 1,
             "建筑工人": 1,
             "清洁工": 1,
             "保安": 1,
@@ -198,9 +203,6 @@ KEYWORDS_DB = {
             "低保户": 1,
             "五保户": 1,
             "退伍军人优抚": 1,
-            "找不到老板": 1,
-            "拿不到工资": 1,
-            "干完活不给钱": 1,
             "帮忙写诉状": 1,
             "不会打官司": 1,
             "收集不了证据": 1,
@@ -219,9 +221,7 @@ KEYWORDS_DB = {
             "农村建房施工合同纠纷": 1,
             "墙壁发霉跳闸": 1,
             "承揽人质量不合格": 1,
-            "讨薪": 1,
             "工程款": 1,
-            "拖欠工资": 1,
             "多次讨要未果": 1,
             "没签合同": 1
         },
@@ -256,12 +256,17 @@ KEYWORDS_DB = {
             "过罚不当": 3,
             "同案不同罚": 3,
             "行政处罚畸重": 3,
-            "首违不罚": 3
+            "首违不罚": 3,
+            "罚款太重": 3,
+            "小本生意罚不起": 3,
+            "同样情况罚得不一样": 3,
+            "首违免罚": 3,
+            "初次轻微违法": 3,
+            "罚款与违法情节不相当": 3,
+            "违法所得很少但罚款很高": 3,
+            "反映了一年没动静": 3
         },
         "特征词": {
-            "打了12345没人管": 1,
-            "投诉了没下文": 1,
-            "反映了一年没动静": 1,
             "职能部门说不归他管": 1,
             "违法建筑还在建没人拆": 1,
             "噪音超标环保说测不了": 1,
@@ -281,123 +286,118 @@ KEYWORDS_DB = {
             "猴疱疹病毒感染": 1,
             "病毒性脑炎死亡": 1,
             "行政复议维持": 1,
-            "罚款太重": 1,
-            "处罚不公平": 1,
-            "同样情况罚得不一样": 1,
-            "小本生意罚不起": 1
+            "处罚不公平": 1
         },
         "对应部门": "市场监督管理局、生态环境局、自然资源局、城管局、住建局、卫健委、教育局、人社局、公安局派出所（不作为）、消防大队\n、督促履职、纠正违法、整改落实、行政公益诉讼、发出检察建议"
     }
 }
 
-# ========== 三层智能匹配 ==========
-
-def _char_level_match(text: str, keyword: str, max_inter_chars: int = 3) -> bool:
-    """字级子序列匹配（最强兜底）"""
-    if len(keyword) <= 1:
-        return keyword in text
-    chars = list(keyword)
-    pattern = "".join(re.escape(c) + ".{0," + str(max_inter_chars) + "}" for c in chars[:-1]) + re.escape(chars[-1])
-    return bool(re.search(pattern, text))
-
-
-def _word_level_match(text_words: list, keyword_words: list, max_gap: int = 2) -> bool:
-    """词级子序列匹配（容忍间隔词）"""
-    if not keyword_words:
-        return False
-    if len(keyword_words) == 1:
-        return keyword_words[0] in text_words
-    try:
-        start_idx = text_words.index(keyword_words[0])
-    except ValueError:
-        return False
-    current_idx = start_idx
-    for kw in keyword_words[1:]:
-        found = False
-        search_end = min(current_idx + max_gap + 2, len(text_words))
-        for i in range(current_idx + 1, search_end):
-            if text_words[i] == kw:
-                current_idx = i
-                found = True
-                break
-        if not found:
-            return False
-    return True
-
-
 def _match_keyword(text: str, keyword: str) -> bool:
-    """三层匹配策略"""
-    # 层1：精确子串
+    """三层匹配：精确 -> jieba分词 -> 字级"""
     if keyword in text:
         return True
-
-    # 层2：jieba分词子序列
     text_words = list(jieba.cut(text))
-    keyword_words = list(jieba.cut(keyword))
-    if _word_level_match(text_words, keyword_words, max_gap=2):
+    kw_words = list(jieba.cut(keyword))
+    # 简化版子序列匹配
+    if len(kw_words) == 1:
+        return kw_words[0] in text_words
+    try:
+        idx = text_words.index(kw_words[0])
+        for kw in kw_words[1:]:
+            found = False
+            for i in range(idx+1, min(idx+4, len(text_words))):
+                if text_words[i] == kw:
+                    idx = i
+                    found = True
+                    break
+            if not found:
+                return False
         return True
+    except:
+        pass
+    # 字级兜底
+    return bool(re.search(".".join(keyword), text))
 
-    # 层3：字级子序列
-    if _char_level_match(text, keyword, max_inter_chars=3):
-        return True
+def _check_excluded(text: str):
+    """
+    检查是否命中全局排除词
+    返回: (是否被排除, 命中的排除词)
+    """
+    if not text:
+        return False, None
+    text_lower = text.lower()
+    for excluded_word in EXCLUDED_WORDS:
+        if _match_keyword(text_lower, excluded_word):
+            return True, excluded_word
+    return False, None
 
-    return False
-
-
-# ========== 置信度计算 ==========
+def check_excluded(text: str):
+    """供外部调用的排除词检测接口"""
+    return _check_excluded(text)
 
 def calculate_confidence(text: str, category: str) -> dict:
-    """双层级权重算法 - jieba智能版"""
-    if not text or not isinstance(text, str):
-        return {"score": 0, "confidence": "低", "matched_core": [], "matched_feature": []}
-
-    if category not in KEYWORDS_DB:
-        return {"score": 0, "confidence": "低", "matched_core": [], "matched_feature": []}
-
-    score = 0
-    matched_core = []
-    matched_feature = []
-    cat_data = KEYWORDS_DB[category]
-
-    for word, weight in cat_data["核心定性词"].items():
-        if _match_keyword(text, word):  # 改为智能匹配
-            score += weight
-            matched_core.append(word)
+    """智能软过滤：排除词扣分博弈制"""
+    text_lower = text.lower()
+    words = set(jieba.lcut(text_lower))
     
-    for word, weight in cat_data["特征词"].items():
-        if _match_keyword(text, word):  # 改为智能匹配
-            score += weight
-            matched_feature.append(word)
-
-    # 判定置信度等级
-    if score >= 6 or len(matched_core) >= 2:
-        conf_level = "高"
-    elif score >= 3 or len(matched_core) == 1:
-        conf_level = "中"
-    else:
-        conf_level = "低"
-
+    cat_data = KEYWORDS_DB.get(category, {})
+    
+    # 正向得分
+    score = 0
+    matched_keywords = []
+    
+    core_words = set(cat_data.get("core", []))
+    feature_words = set(cat_data.get("feature", []))
+    
+    # 核心词+3
+    for kw in core_words:
+        if kw in text_lower or kw in words:
+            score += 3
+            matched_keywords.append(f"{kw}(核)")
+    
+    # 特征词+1
+    for kw in feature_words:
+        if kw in text_lower or kw in words:
+            score += 1
+            matched_keywords.append(f"{kw}(特)")
+    
+    # 负向扣分（关键改进）
+    exclude_hits = words & EXCLUDE_WORDS
+    exclude_penalty = len(exclude_hits) * 2  # 每个排除词扣2分
+    
+    # 净得分计算
+    net_score = score - exclude_penalty
+    
+    # 返回详细结果供UI展示
     return {
-        "score": score,
-        "confidence": conf_level,
-        "matched_core": matched_core,
-        "matched_feature": matched_feature,
-        "department": cat_data.get("对应部门", "")
+        "raw_score": score,              # 原始得分
+        "exclude_penalty": exclude_penalty,  # 排除词扣分
+        "net_score": net_score,          # 净得分（用于判定）
+        "keywords": matched_keywords,
+        "exclude_hits": list(exclude_hits),  # 命中的排除词（用于提示）
+        "is_excluded": net_score < 3     # 只有净分<3才视为排除
     }
 
 
-def keyword_match(text: str) -> str:
-    """遍历所有类别，返回得分最高的类别（阈值3分）"""
+def keyword_match(text: str) -> tuple:
+    """返回最佳类别和详细信息（供UI展示排除词处理过程）"""
     if not text:
-        return None
-
+        return None, {}
+    
     best_cat = None
-    best_score = 0
-
+    best_result = None
+    best_net_score = -999
+    
     for cat in KEYWORDS_DB.keys():
         result = calculate_confidence(text, cat)
-        if result["score"] > best_score:
-            best_score = result["score"]
+        # 使用净得分比较
+        if result["net_score"] > best_net_score:
+            best_net_score = result["net_score"]
             best_cat = cat
-
-    return best_cat if best_score >= 3 else None
+            best_result = result
+    
+    # 净得分<3才返回None（硬过滤阈值）
+    if best_net_score < 3:
+        return None, best_result
+    
+    return best_cat, best_result
