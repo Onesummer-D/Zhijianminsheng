@@ -1,5 +1,4 @@
 # 智检民声 —— 12345涉检线索智能筛查系统
-**An Explainable Hybrid NLP System for Legal-related Complaint Screening
 
 [![Python](https://img.shields.io/badge/python-3.8+-green.svg)](https://www.python.org/)
 [![Gradio](https://img.shields.io/badge/Gradio-5.x-orange.svg)](https://gradio.app/)
@@ -61,6 +60,7 @@
 考虑到12345工单分类具有明确业务规则，同时存在大量模糊表达，本项目没有直接采用端到端LLM分类，而设计：
 
 规则引擎负责高置信度快速筛查；
+
 LLM负责复杂语义理解与边界案例（中低置信度样本）复核。
 
 该设计在保证准确率的同时降低API调用成本。
@@ -70,7 +70,9 @@ LLM负责复杂语义理解与边界案例（中低置信度样本）复核。
 传统深度模型虽然具有较强语义能力，但难以解释分类原因。因此设计“双层级权重计分+排除词保护门”机制：
 
 核心定性词 (+3)
+
 特征词 (+1)
+
 排除词触发软过滤
 
 使系统能够输出：“为什么判断为该类别”。
