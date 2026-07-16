@@ -21,23 +21,23 @@
 
 ### Gradio首页界面
 
-<img src="./assets/demo_main.png" width="800">
+<img src="./Assets/demo_main.png" width="800">
 
 ### 单条查询筛查结果展示
 
-<img src="./assets/demo_result.png" width="800">
+<img src="./Assets/demo_result.png" width="800">
 
-<img src="./assets/demo_result1.png" width="800">
+<img src="./Assets/demo_result1.png" width="800">
 
-<img src="./assets/demo_result2.png" width="800">
+<img src="./Assets/demo_result2.png" width="800">
 
 ### 批量筛查与结果导出
 
-<img src="./assets/demo_batch.png" width="800">
+<img src="./Assets/demo_batch.png" width="800">
 
-<img src="./assets/demo_batch1.png" width="800">
+<img src="./Assets/demo_batch1.png" width="800">
 
-<img src="./assets/demo_batch2.png" width="800">
+<img src="./Assets/demo_batch2.png" width="800">
 
 ---
 
@@ -57,9 +57,9 @@
 
 ## 技术架构
 
-<img src="./assets/architecture1.png" width="800">
+<img src="./Assets/architecture1.png" width="800">
 
-<img src="./assets/architecture2.png" width="800">
+<img src="./Assets/architecture2.png" width="800">
 
 ---
 ## 核心设计与技术决策
