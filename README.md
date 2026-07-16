@@ -17,6 +17,30 @@
 
 ---
 
+## 系统演示
+
+### Gradio首页界面
+
+<img src="./assets/demo_main.png" width="800">
+
+### 单条查询筛查结果展示
+
+<img src="./assets/demo_result.png" width="800">
+
+<img src="./assets/demo_result1.png" width="800">
+
+<img src="./assets/demo_result2.png" width="800">
+
+### 批量筛查与结果导出
+
+<img src="./assets/demo_batch.png" width="800">
+
+<img src="./assets/demo_batch1.png" width="800">
+
+<img src="./assets/demo_batch2.png" width="800">
+
+---
+
 ## 核心功能
 
 | 功能模块 | 说明 |
@@ -33,35 +57,20 @@
 
 ## 技术架构
 
-```
-+-----------------------------+
-|       Gradio 前端界面        |
-| (单条查询 / 批量筛查 / 台账)  |
-+-----------------------------+
-              |
-+-----------------------------+
-|      业务逻辑层              |
-| 脱敏 -> 规则引擎 -> API兜底   |
-| -> 法条匹配 -> 相似案例 ->    |
-| 点位提取 -> 要素提取 -> 日志   |
-+-----------------------------+
-              |
-+-------------+  +--------------+  +--------------+
-| 规则引擎     |  | DeepSeek API |  |  案例/法条库  |
-|(jieba+权重) |  | (语义增强)   |  |(TF-IDF匹配)  |
-+-------------+  +--------------+  +--------------+
-```
+<img src="./assets/architecture1.png" width="800">
+
+<img src="./assets/architecture2.png" width="800">
 
 ---
 ## 核心设计与技术决策
 
-### 1. 规则引擎 + LLM语义复核的双引擎架构
+### 1. “规则引擎 + LLM语义复核”的双引擎架构
 
 考虑到12345工单分类具有明确业务规则，同时存在大量模糊表达，本项目没有直接采用端到端LLM分类，而设计：
 
-规则引擎负责高置信度快速筛查；
+- 规则引擎负责高置信度快速筛查；
 
-LLM负责复杂语义理解与边界案例（中低置信度样本）复核。
+- LLM负责复杂语义理解与边界案例（中低置信度样本）复核。
 
 该设计在保证准确率的同时降低API调用成本。
 
@@ -69,11 +78,11 @@ LLM负责复杂语义理解与边界案例（中低置信度样本）复核。
 
 传统深度模型虽然具有较强语义能力，但难以解释分类原因。因此设计“双层级权重计分+排除词保护门”机制：
 
-核心定性词 (+3)
+- 核心定性词 (+3)
 
-特征词 (+1)
+- 特征词 (+1)
 
-排除词触发软过滤
+- 排除词触发软过滤
 
 使系统能够输出：“为什么判断为该类别”。
 
@@ -104,28 +113,26 @@ export DEEPSEEK_API_KEY="your-api-key-here"
 python app.py
 ```
 
-服务启动后访问：`http://localhost:6009`
-
 ---
 
 ## 项目目录
 
 ```
 zhijianminsheng/
-├── app.py                      # 主程序
-├── single_query_v2.py          # 单条查询
-├── extract_elements.py         # 要素提取
-├── rule_engine_keywords.py     # 双层级权重规则引擎
-├── api_client.py               # DeepSeek API
-├── case_rag.py                 # 相似案例匹配
-├── similarity_matcher.py       # TF-IDF 相似度计算
-├── convert_excel.py            # Excel 关键词库自动转换工具
+├── app.py                      
+├── single_query_v2.py          
+├── extract_elements.py         
+├── rule_engine_keywords.py     
+├── api_client.py               
+├── case_rag.py                 
+├── similarity_matcher.py      
+├── convert_excel.py           
 ├── data/
-│   └── legal_basis_v2.json     # 四大检察法条库
+│   └── legal_basis_v2.json     
 ├── 关键词库.xlsx                
 ├── 典型案例库.xlsx              
 ├── 法条关联表 完整版.xlsx        
-└── logs/                       # 审计日志（自动按天生成）
+└── logs/                       
 ```
 
 ---
@@ -145,9 +152,9 @@ zhijianminsheng/
 
 ```
 if 规则引擎高分（>=6 且分差>=3）:
-    直接返回规则结果（快速通道，无API调用）
+    直接返回规则结果
 elif 规则引擎中低分或存在交叉:
-    调用 DeepSeek API 语义增强（复核通道）
+    调用 DeepSeek API 语义增强
 else:
     判定为普通投诉（排除词保护门阻断API）
 ```
